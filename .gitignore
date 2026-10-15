@@ -1,0 +1,24 @@
+# Rust Build Artifacts
+target/
+**/target/
+Cargo.lock
+
+# Python Cache & Testing
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+**/.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs & Temporary Files
+*.log
+**/*.log
+
+# Operating System Files
+Thumbs.db
+Desktop.ini
+.DS_Store

@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="BioOS Enterprise Medical AI Operating System - Dual-Plane Flight Deck, Hospital Topology, Master Bed Board, and Clinical Wellbeing Console.">
+  <title>BioOS Enterprise // Hospital Healthcare &amp; Clinical Wellbeing OS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Master Header Bar -->
+  <header class="master-header">
+    <div class="brand-container">
+      <div class="brand-logo-glow"></div>
+      <div class="brand-titles">
+        <div class="brand-row">
+          <span class="brand-name">BioOS</span>
+          <span class="brand-tag">Enterprise v2.0-LTS</span>
+          <span class="badge badge-safety">IEC 62304 Class C</span>
+          <span class="badge badge-ice">ASTM F2761 ICE</span>
+          <span class="badge badge-rocm">AMD ROCm 6.2</span>
+          <span class="badge badge-hics">HICS 2014</span>
+        </div>
+        <p class="brand-sub">Enterprise Hospital Operating System &bull; 78-Bed Multi-Ward Topology &bull; 1000 Hz Deterministic Rust Safety Microkernel</p>
+      </div>
+    </div>
+
+    <!-- Operating Regime Control & Vital Badges -->
+    <div class="header-controls">
+      <div class="heartbeat-monitor" id="heartbeatContainer">
+        <span class="heartbeat-pulse" id="heartbeatPulse"></span>
+        <span class="heartbeat-text">KERNEL LOOP: <strong id="loopHz">1000 Hz</strong> (&lt;1 ms)</span>
+      </div>
+
+      <div class="regime-selector">
+        <span class="regime-label">OPERATING REGIME:</span>
+        <div class="btn-group" role="group" aria-label="Global Operating Regime">
+          <button id="regimeRoutineBtn" class="regime-btn active routine" onclick="setRegime('ROUTINE')">ROUTINE</button>
+          <button id="regimeSurgeBtn" class="regime-btn surge" onclick="setRegime('SURGE')">SURGE</button>
+          <button id="regimeDisasterBtn" class="regime-btn disaster" onclick="setRegime('DISASTER')">DISASTER</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Enterprise Navigation Tabs -->
+  <nav class="enterprise-nav-tabs" aria-label="Hospital Operating Consoles">
+    <button class="nav-tab active" id="tabBedBoard" onclick="switchView('BED_BOARD')">🏥 1. Master Bed Board (78 Beds)</button>
+    <button class="nav-tab" id="tabBedsideDeck" onclick="switchView('BEDSIDE_DECK')">⚡ 2. Bedside Safety Flight Deck</button>
+    <button class="nav-tab" id="tabPharmacy" onclick="switchView('PHARMACY')">💊 3. Pharmacy &amp; NTI Surveillance</button>
+    <button class="nav-tab" id="tabWorkforce" onclick="switchView('WORKFORCE')">🩺 4. Workforce &amp; Wellbeing Roster</button>
+    <button class="nav-tab" id="tabTerminal" onclick="switchView('TERMINAL')">&gt;_ 5. Microkernel Shell (bioos-ctl)</button>
+  </nav>
+
+  <!-- Persistent Active Monitored Patient Banner -->
+  <div class="active-patient-banner" id="activePatientBanner">
+    <div class="banner-left">
+      <span class="banner-badge">CURRENTLY MONITORED BEDSIDE:</span>
+      <strong class="banner-bed-tag" id="bannerBedId">ICU-A-01</strong>
+      <span class="banner-separator">&bull;</span>
+      <strong id="bannerPatientName">Eleanor Vance (Age 68 F)</strong>
+      <span class="banner-separator">&bull;</span>
+      <span class="banner-diag" id="bannerDiagnosis">Septic Shock / Severe ARDS</span>
+      <span class="banner-separator">&bull;</span>
+      <span>ESI: <strong id="bannerEsi" class="esi-chip esi-1">1 (Critical)</strong></span>
+      <span class="banner-separator">&bull;</span>
+      <span>MAP: <strong id="bannerMap" class="text-danger">58 mmHg</strong></span>
+      <span class="banner-separator">&bull;</span>
+      <span>Active Infusions: <strong id="bannerInfusions">Norepinephrine, Vasopressin</strong></span>
+    </div>
+    <div class="banner-right">
+      <button class="banner-action-btn" onclick="switchView('BEDSIDE_DECK')">VIEW LIVE FLIGHT DECK &rarr;</button>
+    </div>
+  </div>
+
+  <!-- VIEW 1: MASTER BED BOARD (HOSPITAL FLOOR PLAN) -->
+  <section class="hospital-view active-view" id="viewBedBoard">
+    <div class="view-header-row">
+      <div>
+        <h2 class="view-title">Master Hospital Bed Matrix &amp; Departmental Census</h2>
+        <p class="view-sub">Real-time status across all 6 specialized hospital units &bull; 78 Licensed Beds &bull; Dynamic Bed Placement &amp; RTLS Turnover</p>
+      </div>
+      <div class="census-quick-stats" id="censusStatsRow">
+        <div class="stat-pill">Total Beds: <strong>78</strong></div>
+        <div class="stat-pill">Occupied: <strong id="censusOccupied">8</strong></div>
+        <div class="stat-pill">Available: <strong id="censusAvailable" class="text-success">68</strong></div>
+        <div class="stat-pill">Turnover / Cleaning: <strong id="censusCleaning" class="text-warning">2</strong></div>
+        <div class="stat-pill">Hospital E_I: <strong id="censusEi" class="text-info">0.122</strong></div>
+      </div>
+    </div>
+
+    <!-- Dynamic Wards Container (Rendered by JS) -->
+    <div class="wards-grid-container" id="wardsGridContainer">
+      <!-- Wards and beds dynamically injected -->
+    </div>
+  </section>
+
+  <!-- VIEW 2: BEDSIDE SAFETY FLIGHT DECK (Deep Dive on Selected Bed) -->
+  <section class="hospital-view" id="viewBedsideDeck">
+    <main class="dashboard-grid">
+
+      <!-- Column 1: Plane A Safety Kernel (Rust #![no_std]) -->
+      <section class="deck-column plane-a-column" aria-labelledby="planeATitle">
+        <div class="panel-header">
+          <div class="panel-tag safety-glow">PLANE A: HARD REAL-TIME SAFETY KERNEL</div>
+          <h2 id="planeATitle" class="panel-title">Deterministic Actuator &amp; Hardware Lockout</h2>
+          <span class="badge-engine">Engines 1, 2, 3, 4 (Rust #![no_std])</span>
+        </div>
+
+        <!-- Watchdog State & Relays -->
+        <div class="card watchdog-card" id="watchdogCard">
+          <div class="card-title-row">
+            <span class="card-title">Watchdog Mealy Automaton (Engine 4)</span>
+            <span class="state-indicator" id="watchdogStateBadge">STATE 0: NORMAL</span>
+          </div>
+          <div class="relay-telemetry-grid">
+            <div class="relay-gauge">
+              <span class="relay-label">Solid-State Relay (SSR)</span>
+              <div class="relay-status active" id="ssrStatus">ENERGIZED</div>
+              <span class="relay-metric">&le; 2 ms Cutoff Response</span>
+            </div>
+            <div class="relay-gauge">
+              <span class="relay-label">Mechanical Safety Air-Gap</span>
+              <div class="relay-status active" id="mechRelayStatus">CLOSED</div>
+              <span class="relay-metric">&le; 12 ms Isolation Relay</span>
+            </div>
+            <div class="relay-gauge">
+              <span class="relay-label">Cognitive Plane Heartbeat</span>
+              <div class="relay-status active" id="heartbeatStatus">50ms NOMINAL</div>
+              <span class="relay-metric">Missing &gt;50ms &rArr; Trip</span>
+            </div>
+          </div>
+          <div class="trip-message-box" id="tripMessageBox">All safety-critical interlocks active. No trip conditions detected.</div>
+        </div>
+
+        <!-- Physical Infusion Actuator Telemetry & Trip Simulator -->
+        <div class="card actuator-card">
+          <div class="card-title-row">
+            <span class="card-title">Infusion Pump Actuator Telemetry (ASTM F2761)</span>
+            <span class="pill-metric" id="pumpRateDisplay">125.0 mL/h</span>
+          </div>
+          
+          <div class="control-row">
+            <label for="pressureSlider">In-Line Hydrostatic Pressure: <strong id="pressureValDisplay">180 mmHg</strong> (Limit: 525 mmHg / 10.2 psi)</label>
+            <input type="range" id="pressureSlider" min="50" max="650" value="180" class="slider" oninput="updatePressure(this.value)">
+          </div>
+
+          <div class="control-row">
+            <label for="bubbleSlider">Ultrasonic Air Bubble Size: <strong id="bubbleValDisplay">0 &mu;L</strong> (Trip: &ge; 25 &mu;L)</label>
+            <input type="range" id="bubbleSlider" min="0" max="60" value="0" class="slider" oninput="updateBubble(this.value)">
+          </div>
+
+          <div class="quick-action-buttons">
+            <button class="action-btn danger-outline" onclick="triggerOcclusionTrip()">Simulate Occlusion Trip (550 mmHg)</button>
+            <button class="action-btn danger-outline" onclick="triggerBubbleTrip()">Inject Air Bubble (35 &mu;L)</button>
+            <button class="action-btn reset-btn" onclick="resetActuator()">Reset Actuator Lockout</button>
+          </div>
+        </div>
+
+        <!-- Aerospace Dual-Engine Telemetry Comparison -->
+        <div class="card engine-compare-card">
+          <div class="card-title-row">
+            <span class="card-title">Aerospace Dual-Engine Cross-Checking</span>
+            <span class="pill-metric text-success">SYNCHRONIZED</span>
+          </div>
+          <div class="engine-table-wrapper">
+            <table class="engine-compare-table">
+              <thead>
+                <tr>
+                  <th>Parameter</th>
+                  <th>Engine 1 (Actuation)</th>
+                  <th>Engine 2 (Envelope)</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Execution Plane</td>
+                  <td>Rust #![no_std] Core</td>
+                  <td>Kalman Observer</td>
+                  <td><span class="status-dot green"></span> Valid</td>
+                </tr>
+                <tr>
+                  <td>Cycle Time</td>
+                  <td>1.00 ms (1000 Hz)</td>
+                  <td>10.00 ms (100 Hz)</td>
+                  <td><span class="status-dot green"></span> On-Time</td>
+                </tr>
+                <tr>
+                  <td>Commanded Flow</td>
+                  <td id="e1RateCell">125.0 mL/h</td>
+                  <td id="e2RateCell">125.0 mL/h Ceiling</td>
+                  <td><span class="status-dot green" id="rateSyncDot"></span> Lockstep</td>
+                </tr>
+                <tr>
+                  <td>Stall Protection</td>
+                  <td id="e1StallCell">Standby</td>
+                  <td id="e2StallCell">Alpha-Floor Armed</td>
+                  <td><span class="status-dot green" id="stallSyncDot"></span> Guarded</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Column 2: Plane B & Envelope Protection -->
+      <section class="deck-column plane-b-column" aria-labelledby="planeBTitle">
+        <div class="panel-header">
+          <div class="panel-tag ai-glow">PLANE B: DYNAMIC ENVELOPE &amp; KALMAN FILTER</div>
+          <h2 id="planeBTitle" class="panel-title">Airbus Alpha-Floor Stall Protection</h2>
+          <span class="badge-engine">Engine 2 (Kalman Observer) &bull; Engine 5 (COE)</span>
+        </div>
+
+        <!-- Alpha-Floor Stall Card -->
+        <div class="card alpha-floor-card" id="alphaFloorCard">
+          <div class="card-title-row">
+            <span class="card-title">Hemodynamic Alpha-Floor Envelope (Airbus Analogy)</span>
+            <span class="state-indicator" id="alphaFloorStateBadge">NORMAL FLIGHT</span>
+          </div>
+          
+          <div class="stall-warning-box" id="stallWarningBox">
+            <div class="stall-icon">&Delta;</div>
+            <div class="stall-text">
+              <strong id="stallTitle">ENVELOPE NOMINAL</strong>
+              <p id="stallDesc">Hemodynamic state trajectory within safe physiological flight envelope.</p>
+            </div>
+          </div>
+
+          <div class="vital-slider-group">
+            <div class="control-row">
+              <label for="mapSlider">Mean Arterial Pressure (MAP): <strong id="mapValDisplay">80 mmHg</strong> (Stall Threshold: &lt; 65 mmHg)</label>
+              <input type="range" id="mapSlider" min="30" max="130" value="80" class="slider" oninput="updateMapTelemetry(this.value)">
+            </div>
+
+            <div class="control-row">
+              <label for="hrSlider">Heart Rate (BPM): <strong id="hrValDisplay">75 BPM</strong> (Tachycardia: &gt; 120 BPM)</label>
+              <input type="range" id="hrSlider" min="35" max="180" value="75" class="slider" oninput="updateHrTelemetry(this.value)">
+            </div>
+          </div>
+
+          <div class="action-buttons-row">
+            <button class="action-btn warning-btn" onclick="simulateHemodynamicStall()">Trigger Hemodynamic Stall (MAP 42 mmHg)</button>
+            <button class="action-btn reset-btn" onclick="recoverFromStall()">Execute Alpha-Floor Recovery</button>
+          </div>
+        </div>
+
+        <!-- CLSI C56-A Hemolysis Gate -->
+        <div class="card lab-card">
+          <div class="card-title-row">
+            <span class="card-title">CLSI C56-A Potassium Hemolysis Gate</span>
+            <span class="pill-metric" id="kStatusPill">VALID</span>
+          </div>
+          <div class="control-row">
+            <label for="hIndexSlider">Hemolysis H-Index: <strong id="hIndexDisplay">12 mg/dL</strong> (Void Threshold: &gt; 20 mg/dL)</label>
+            <input type="range" id="hIndexSlider" min="0" max="60" value="12" class="slider" oninput="updateHIndex(this.value)">
+          </div>
+          <div class="control-row">
+            <label for="kSlider">Serum Potassium [K+]: <strong id="kValDisplay">4.40 mEq/L</strong> (Target: 3.5 - 5.0)</label>
+            <input type="range" id="kSlider" min="2.0" max="8.0" step="0.1" value="4.4" class="slider" oninput="updatePotassium(this.value)">
+          </div>
+          <div class="gate-status-box" id="gateStatusBox">CLSI C56-A Specimen Integrity: Acceptable. Potassium reading approved for closed-loop titrations.</div>
+        </div>
+
+        <!-- CKD-EPI & Tisdale Risk -->
+        <div class="card renal-card">
+          <div class="card-title-row">
+            <span class="card-title">2021 CKD-EPI &amp; Tisdale QTc Arrhythmia Risk</span>
+            <span class="pill-metric" id="egfrPillDisplay">eGFR: 68 mL/min</span>
+          </div>
+          <div class="control-row">
+            <label for="crSlider">Serum Creatinine: <strong id="crValDisplay">1.1 mg/dL</strong> (Metformin Hold: eGFR &lt; 30)</label>
+            <input type="range" id="crSlider" min="0.4" max="5.0" step="0.1" value="1.1" class="slider" oninput="updateCreatinine(this.value)">
+          </div>
+          <div class="renal-alert-box" id="renalAlertBox">
+            <div id="renalResultText">SAFE (&ge; 45 mL/min/1.73m&sup2;)</div>
+            <div class="renal-detail" id="renalDetailText">Standard dosing permitted (2000 mg/day max).</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Column 3: Command Center & Wellbeing -->
+      <section class="deck-column ops-column" aria-labelledby="opsTitle">
+        <div class="panel-header">
+          <div class="panel-tag ops-glow">PLANE C: HOSPITAL COMMAND &amp; WELLBEING</div>
+          <h2 id="opsTitle" class="panel-title">Hospital Operational Engine (Engine 6)</h2>
+          <span class="badge-engine">Humber River Hospital (HRH) &bull; HICS 2014</span>
+        </div>
+
+        <!-- Hospital Escalation Index (E_I) -->
+        <div class="card escalation-card">
+          <div class="card-title-row">
+            <span class="card-title">Hospital Escalation Index (E_I)</span>
+            <span class="state-indicator" id="eiPillDisplay">E_I = 0.425</span>
+          </div>
+          <div class="progress-bar-container">
+            <div class="progress-bar" id="eiProgressBar" style="width: 42%;"></div>
+          </div>
+          <div class="capacity-telem-grid">
+            <div class="telem-chip">
+              <span class="chip-label">ED Census</span>
+              <strong id="edCensusDisplay">32 / 40 Bays</strong>
+            </div>
+            <div class="telem-chip">
+              <span class="chip-label">ICU Census</span>
+              <strong id="icuCensusDisplay">18 / 25 Beds</strong>
+            </div>
+            <div class="telem-chip">
+              <span class="chip-label">Nurse Staffing</span>
+              <strong id="nurseRatioDisplay">45 / 45 On Duty</strong>
+            </div>
+            <div class="telem-chip">
+              <span class="chip-label">Emergency ORs</span>
+              <strong id="orCountDisplay">3 / 10 Theaters</strong>
+            </div>
+          </div>
+          <div class="action-buttons-row">
+            <button class="action-btn warning-btn" onclick="simulateSurgeScenario()">Simulate Mass Casualty Surge</button>
+            <button class="action-btn info-btn" onclick="triggerReverseTriageBatch()">Run Reverse Triage Filter (&lt;4% Mort)</button>
+          </div>
+        </div>
+
+        <!-- Clinical & Patient Wellbeing Engine Card -->
+        <div class="card wellbeing-card" id="wellbeingCard">
+          <div class="card-title-row">
+            <span class="card-title">Clinical &amp; Patient Wellbeing Engine</span>
+            <span class="pill-metric text-success" id="wellbeingBadge">COGNITIVE LOAD: 42.0</span>
+          </div>
+          <div class="wellbeing-grid">
+            <div class="wb-metric-box">
+              <span class="wb-label">Avg Clinician CLI</span>
+              <strong class="wb-val" id="avgCliDisplay">42.0 / 100</strong>
+              <span class="wb-sub text-success" id="burnoutRiskDisplay">Low Burnout Risk</span>
+            </div>
+            <div class="wb-metric-box">
+              <span class="wb-label">Nuisance Alarms Filtered</span>
+              <strong class="wb-val text-info" id="suppressedAlarmsDisplay">83 / hr</strong>
+              <span class="wb-sub">CLSI C56-A / IEEE 11073</span>
+            </div>
+            <div class="wb-metric-box">
+              <span class="wb-label">Circadian Lighting</span>
+              <strong class="wb-val" id="circadianLuxDisplay">680 Lux (Day)</strong>
+              <span class="wb-sub">480nm Blue Enriched</span>
+            </div>
+            <div class="wb-metric-box">
+              <span class="wb-label">Acoustic Noise Envelope</span>
+              <strong class="wb-val" id="acousticDbDisplay">38.5 dB</strong>
+              <span class="wb-sub">&lt; 45 dB Day / &lt; 35 dB Night</span>
+            </div>
+          </div>
+          <div class="clinician-lock-alert" id="clinicianLockAlert">
+            <span>&bull; Nurse RN-103 (Elena Rostova): <strong>Cognitive Load 89.2 (CRITICAL)</strong> &mdash; <span class="badge-lock">ASSIGNMENT LOCKED</span> to prevent medication error.</span>
+          </div>
+          <div class="action-buttons-row">
+            <button class="action-btn success-btn" onclick="testAlarmFilter(true)">Simulate Transducer Motion Slip (Auto-Suppress)</button>
+            <button class="action-btn warning-btn" onclick="testAlarmFilter(false)">Simulate True Desaturation (Emergency Bedside Alarm)</button>
+          </div>
+          <div class="alarm-filter-log" id="alarmFilterLog">Alarm suppression filter standby. Real-time sensor fusion active.</div>
+        </div>
+      </section>
+    </main>
+  </section>
+
+  <!-- VIEW 3: PHARMACY & NTI SURVEILLANCE -->
+  <section class="hospital-view" id="viewPharmacy">
+    <div class="view-header-row">
+      <div>
+        <h2 class="view-title">Hospital-Wide Pharmacy &amp; Narrow Therapeutic Index (NTI) Surveillance</h2>
+        <p class="view-sub">Automated Drug-Drug Interaction (DDI) Detection &bull; Dose Error Reduction Systems (DERS) &bull; RFC 9162 Merkle Audit Ledger</p>
+      </div>
+      <button class="action-btn info-btn" onclick="fetchPharmacySurveillance()">Refresh Surveillance</button>
+    </div>
+
+    <div class="pharmacy-grid">
+      <div class="card">
+        <div class="card-title-row">
+          <span class="card-title">Active High-Risk Infusions Across All Hospital Wards</span>
+          <span class="pill-metric text-warning" id="pharmActiveCount">6 Infusions</span>
+        </div>
+        <div class="table-container">
+          <table class="enterprise-table" id="pharmInfusionsTable">
+            <thead>
+              <tr>
+                <th>Bed</th>
+                <th>Patient</th>
+                <th>Medication</th>
+                <th>Rate / Dose</th>
+                <th>Clinical Target</th>
+                <th>Interlock Status</th>
+              </tr>
+            </thead>
+            <tbody id="pharmInfusionsBody">
+              <!-- Rendered dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title-row">
+          <span class="card-title">Real-Time Drug-Drug Interaction (DDI) &amp; Contraindication Flags</span>
+          <span class="pill-metric text-danger" id="pharmDdiCount">1 Active Flag</span>
+        </div>
+        <div class="ddi-alerts-container" id="pharmDdiBody">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- VIEW 4: WORKFORCE & STAFF WELLBEING -->
+  <section class="hospital-view" id="viewWorkforce">
+    <div class="view-header-row">
+      <div>
+        <h2 class="view-title">Workforce Management &amp; Acuity-Based Staffing Compliance</h2>
+        <p class="view-sub">Mandated Nurse-to-Patient Ratios &bull; Cognitive Load Index (CLI) Heatmap &bull; Fatigue Safety Lockouts</p>
+      </div>
+    </div>
+
+    <div class="workforce-grid">
+      <div class="card">
+        <div class="card-title-row">
+          <span class="card-title">Unit Staffing Ratio Compliance</span>
+          <span class="pill-metric text-success">100% In-Ratio</span>
+        </div>
+        <div class="table-container">
+          <table class="enterprise-table" id="workforceUnitsTable">
+            <thead>
+              <tr>
+                <th>Unit</th>
+                <th>Occupied Beds</th>
+                <th>Staffed RNs</th>
+                <th>Required RNs</th>
+                <th>Compliance Status</th>
+              </tr>
+            </thead>
+            <tbody id="workforceUnitsBody">
+              <!-- Rendered dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title-row">
+          <span class="card-title">Active Clinician Workload &amp; Burnout Interlocks</span>
+          <span class="pill-metric text-warning">1 Staff Locked</span>
+        </div>
+        <div class="table-container">
+          <table class="enterprise-table" id="workforceCliniciansTable">
+            <thead>
+              <tr>
+                <th>Clinician</th>
+                <th>Role</th>
+                <th>Shift Elapsed</th>
+                <th>Patients Assigned</th>
+                <th>Cognitive Load (CLI)</th>
+                <th>Assignment Lock</th>
+              </tr>
+            </thead>
+            <tbody id="workforceCliniciansBody">
+              <!-- Rendered dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- VIEW 5: BIOOS MICROKERNEL TERMINAL (bioos-ctl) -->
+  <section class="hospital-view" id="viewTerminal">
+    <div class="kernel-terminal-section full-terminal">
+      <div class="terminal-header-bar">
+        <div class="term-title-group">
+          <span class="term-status-led"></span>
+          <strong class="term-title">&gt;_ BioOS Microkernel Administrative Shell (bioos-ctl v2.0-LTS)</strong>
+        </div>
+        <div class="term-quick-chips">
+          <span class="chip-label">Quick Commands:</span>
+          <button class="term-chip" onclick="runConsoleCommand('help')">help</button>
+          <button class="term-chip" onclick="runConsoleCommand('wards')">wards</button>
+          <button class="term-chip" onclick="runConsoleCommand('pharmacy')">pharmacy</button>
+          <button class="term-chip" onclick="runConsoleCommand('ps')">ps</button>
+          <button class="term-chip" onclick="runConsoleCommand('dev')">dev</button>
+          <button class="term-chip" onclick="runConsoleCommand('mem')">mem</button>
+          <button class="term-chip" onclick="runConsoleCommand('vitals')">vitals</button>
+          <button class="term-chip" onclick="runConsoleCommand('stall')">stall</button>
+          <button class="term-chip" onclick="runConsoleCommand('wellbeing')">wellbeing</button>
+          <button class="term-chip" onclick="runConsoleCommand('hics')">hics</button>
+          <button class="term-chip clear-chip" onclick="runConsoleCommand('clear')">clear</button>
+        </div>
+      </div>
+      <div class="terminal-body expanded-body" id="termOutputBody">
+        <div class="term-line welcome-text">BioOS Real-Time Microkernel v2.0-LTS // IEC 62304 Class C Hard Safety Supervisor</div>
+        <div class="term-line welcome-text">Enterprise Multi-Ward Hospital Management System Active (78 Beds Across 6 Units).</div>
+        <div class="term-line welcome-text">Type 'help', 'wards', or 'pharmacy' to query real-time enterprise hospital state.</div>
+        <div class="term-line welcome-text">----------------------------------------------------------------------------------</div>
+      </div>
+      <div class="terminal-input-bar">
+        <span class="term-prompt">admin@bioos-core:~$</span>
+        <input type="text" id="termInput" class="term-input-field" placeholder="Enter microkernel command (e.g. wards, pharmacy, ps, dev, mem)..." autofocus onkeydown="handleTermKey(event)">
+        <button class="term-send-btn" onclick="submitTermInput()">EXECUTE</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 128-Byte Tri-Plane Dual-Cache-Line Memory Inspector Bar (Persistent Footer) -->
+  <footer class="amsv-inspector-bar">
+    <div class="amsv-header-row">
+      <div class="amsv-title">
+        <span class="amsv-pulse-dot"></span>
+        <strong>128-BYTE TRIPLANE DUAL-CACHE-LINE STATE VECTOR // ZERO-BRIDGE PHYSICAL MEMORY</strong>
+      </div>
+      <div class="amsv-details">
+        <span>Address: 0x00007FFE2C7600C0</span>
+        <span>Bound Bed: <strong id="footerBoundBed" class="text-info">ICU-A-01</strong></span>
+        <span>Line 0 (Actuator Seq): <strong id="amsvSeqDisplay">148292</strong></span>
+        <span>Line 1 (Envelope Seq): <strong id="envSeqDisplay">148292</strong></span>
+        <span>CRC-16: <strong id="amsvCrcDisplay">0xE41B</strong></span>
+      </div>
+    </div>
+    
+    <div class="amsv-cacheline-labels">
+      <span class="label-line0">&blacktriangleright; CACHE LINE 0 (0x00..0x3F): FLY-BY-WIRE ACTUATOR KERNEL (ENGINE 1)</span>
+      <span class="label-line1">&blacktriangleright; CACHE LINE 1 (0x40..0x7F): DYNAMIC ENVELOPE &amp; KALMAN OBSERVER (ENGINE 2)</span>
+    </div>
+    <div class="amsv-hex-grid" id="amsvHexGrid">
+      <!-- 128 bytes generated dynamically by JS -->
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

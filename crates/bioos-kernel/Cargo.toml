@@ -1,0 +1,24 @@
+[package]
+name = "bioos-kernel"
+version = "0.1.0"
+edition = "2021"
+authors = ["BioOS Safety Engineering Team"]
+description = "IEC 62304 Class C Hard Real-Time Deterministic Medical Safety Kernel"
+
+[lib]
+crate-type = ["lib", "staticlib", "cdylib"]
+
+[dependencies]
+libm = "0.2"
+
+[features]
+default = ["std"]
+std = []
+no_std = []
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+overflow-checks = true
