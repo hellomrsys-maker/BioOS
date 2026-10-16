@@ -31,6 +31,9 @@ jobs:
       - name: no_std embedded build gate (Cortex-M4F)
         run: cargo build --lib --no-default-features --features no_std --target thumbv7em-none-eabihf --manifest-path crates/bioos-kernel/Cargo.toml
 
+      - name: STM32F407VG board-support build gate (target-stm32 feature)
+        run: cargo build --lib --no-default-features --features no_std,target-stm32 --target thumbv7em-none-eabihf --manifest-path crates/bioos-kernel/Cargo.toml
+
       - name: Unit tests
         run: cargo test --manifest-path crates/bioos-kernel/Cargo.toml
 

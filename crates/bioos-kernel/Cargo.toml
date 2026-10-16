@@ -11,10 +11,18 @@ crate-type = ["lib", "staticlib", "cdylib"]
 [dependencies]
 libm = "0.2"
 
+# P2 on-target board support (compile-gated; no effect on host/simulation builds)
+cortex-m = { version = "0.7", optional = true }
+cortex-m-rt = { version = "0.7", optional = true }
+stm32f4xx-hal = { version = "0.22", optional = true, features = ["stm32f407"] }
+
 [features]
 default = ["std"]
 std = []
 no_std = []
+# On-target STM32F407VG board support: pulls cortex-m + HAL, swaps the panic
+# handler for the latching variant, and enables interrupt-masked spinlocks.
+target-stm32 = ["dep:cortex-m", "dep:cortex-m-rt", "dep:stm32f4xx-hal"]
 
 [profile.release]
 opt-level = 3

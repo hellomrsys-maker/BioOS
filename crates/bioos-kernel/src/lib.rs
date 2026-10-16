@@ -14,7 +14,7 @@
 // replace this with a handler that first drives the watchdog into
 // HardwareLockout and cuts actuator power, then halts. Application crates that
 // install their own panic handler should disable this one via a cargo feature.
-#[cfg(not(feature = "std"))]
+#[cfg(all(not(feature = "std"), not(feature = "target-stm32")))]
 #[panic_handler]
 fn bioos_panic(_info: &core::panic::PanicInfo) -> ! {
     loop {
@@ -34,6 +34,8 @@ pub mod hal;
 pub mod ipc;
 pub mod mm;
 pub mod portable_atomic;
+#[cfg(feature = "target-stm32")]
+pub mod bsp_stm32;
 pub mod scheduler;
 
 pub use amsv::{
