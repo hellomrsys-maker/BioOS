@@ -2,70 +2,62 @@
 //!
 //! Cortex-M (thumbv7em) is a 32-bit target with NO native 64-bit atomics;
 //! `core::sync::atomic::AtomicU64` does not exist there. This module provides
-//! `PortableAtomicU64`:
+//! `PortableAtomicU64` with three compile-time variants:
 //!
-//! * 64-bit targets (host x86_64, MI300X): delegates to the real `AtomicU64`
-//!   - truly wait-free, lock-free, unchanged semantics
-//! * 32-bit targets (Cortex-M4F): interrupt-unsafe-free spinlock cell
-//!   - lock-free (bounded progress), NOT wait-free; critical section is
-//!     a few instructions (load/store/fetch_add on one u64)
-//!   - KNOWN P2 CONSTRAINT: ISR-context access must mask interrupts at or
-//!     above the spinlock priority, else priority inversion can deadlock.
-//!     This is an integration requirement of the on-target phase, to be
-//!     satisfied with `cortex_m::interrupt::free` or NVIC basepri locking.
+//! * 64-bit targets (host x86_64, MI300X): true `AtomicU64` — wait-free.
+//! * 32-bit targets without `target-stm32`: plain spinlock cell (fallback).
+//! * 32-bit targets WITH `target-stm32` (Cortex-M4F on-target): INTERRUPT-
+//!   MASKED access via `cortex_m::interrupt::free` — closes the documented
+//!   priority-inversion constraint (P2 design doc section 3): whoever runs
+//!   masks first, the other context is PENDED rather than spinning against
+//!   it, so a main-loop holder can never deadlock an ISR. The mask covers
+//!   the ENTIRE access (acquire + use + release), eliminating the
+//!   unlock-ordering bug class entirely. Bounded cost: a few masked
+//!   instructions per access; no ISR spins.
 //!
-//! Selection uses `target_pointer_width` (stable cfg). Some 32-bit targets
-//! do have 64-bit atomics (e.g. ARMv8-A LDRD/STRD+LDREXD); choosing the
-//! portable path there is conservative, not incorrect.
+//! Selection uses stable cfgs only (`target_pointer_width`, cargo features).
 
 use core::sync::atomic::Ordering;
 
 #[cfg(target_pointer_width = "64")]
 use core::sync::atomic::AtomicU64;
 
-#[cfg(target_pointer_width = "32")]
+#[cfg(all(target_pointer_width = "32", not(feature = "target-stm32")))]
 use core::cell::UnsafeCell;
-#[cfg(target_pointer_width = "32")]
+#[cfg(all(target_pointer_width = "32", not(feature = "target-stm32")))]
 use core::sync::atomic::AtomicBool;
+
+#[cfg(all(target_pointer_width = "32", feature = "target-stm32"))]
+use core::cell::UnsafeCell;
 
 /// 64-bit atomic cell portable across 64-bit and 32-bit (no 64-bit atomic) targets.
 #[repr(transparent)]
 pub struct PortableAtomicU64 {
     #[cfg(target_pointer_width = "64")]
     inner: AtomicU64,
-    #[cfg(target_pointer_width = "32")]
+    #[cfg(all(target_pointer_width = "32", not(feature = "target-stm32")))]
     inner: SpinCellU64,
+    #[cfg(all(target_pointer_width = "32", feature = "target-stm32"))]
+    inner: MaskedCellU64,
 }
 
-#[cfg(target_pointer_width = "32")]
+#[cfg(all(target_pointer_width = "32", not(feature = "target-stm32")))]
 struct SpinCellU64 {
     lock: AtomicBool,
     value: UnsafeCell<u64>,
 }
 
-// Safety (32-bit path): the spinlock serializes all accesses to `value`.
-#[cfg(target_pointer_width = "32")]
+// Safety (plain spin fallback): the spinlock serializes all accesses.
+#[cfg(all(target_pointer_width = "32", not(feature = "target-stm32")))]
 unsafe impl Sync for SpinCellU64 {}
 
-#[cfg(target_pointer_width = "32")]
+#[cfg(all(target_pointer_width = "32", not(feature = "target-stm32")))]
 impl SpinCellU64 {
     const fn new(value: u64) -> Self {
         Self {
             lock: AtomicBool::new(false),
             value: UnsafeCell::new(value),
         }
-    }
-
-    #[inline]
-    fn lock(&self) {
-        while self.lock.swap(true, Ordering::Acquire) {
-            core::hint::spin_loop();
-        }
-    }
-
-    #[inline]
-    fn unlock(&self) {
-        self.lock.store(false, Ordering::Release);
     }
 
     #[inline]
@@ -91,6 +83,61 @@ impl SpinCellU64 {
         self.unlock();
         prev
     }
+
+    #[inline]
+    fn lock(&self) {
+        while self.lock.swap(true, Ordering::Acquire) {
+            core::hint::spin_loop();
+        }
+    }
+
+    #[inline]
+    fn unlock(&self) {
+        self.lock.store(false, Ordering::Release);
+    }
+}
+
+// On-target variant: interrupt-masked access (closes the ISR priority-
+// inversion constraint; see module docs). The mask covers the ENTIRE access,
+// so no unlock-ordering bug class exists and no ISR ever spins.
+#[cfg(all(target_pointer_width = "32", feature = "target-stm32"))]
+struct MaskedCellU64 {
+    value: UnsafeCell<u64>,
+}
+
+// Safety (masked variant): cortex_m::interrupt::free masks all configurable
+// interrupts for the whole access.
+#[cfg(all(target_pointer_width = "32", feature = "target-stm32"))]
+unsafe impl Sync for MaskedCellU64 {}
+
+#[cfg(all(target_pointer_width = "32", feature = "target-stm32"))]
+impl MaskedCellU64 {
+    const fn new(value: u64) -> Self {
+        Self {
+            value: UnsafeCell::new(value),
+        }
+    }
+
+    #[inline]
+    fn load(&self, _order: Ordering) -> u64 {
+        cortex_m::interrupt::free(|_| unsafe { *self.value.get() })
+    }
+
+    #[inline]
+    fn store(&self, v: u64, _order: Ordering) {
+        cortex_m::interrupt::free(|_| unsafe {
+            *self.value.get() = v;
+        });
+    }
+
+    #[inline]
+    fn fetch_add(&self, v: u64, _order: Ordering) -> u64 {
+        cortex_m::interrupt::free(|_| unsafe {
+            let prev = *self.value.get();
+            *self.value.get() = prev.wrapping_add(v);
+            prev
+        })
+    }
 }
 
 impl PortableAtomicU64 {
@@ -98,8 +145,10 @@ impl PortableAtomicU64 {
         Self {
             #[cfg(target_pointer_width = "64")]
             inner: AtomicU64::new(value),
-            #[cfg(target_pointer_width = "32")]
+            #[cfg(all(target_pointer_width = "32", not(feature = "target-stm32")))]
             inner: SpinCellU64::new(value),
+            #[cfg(all(target_pointer_width = "32", feature = "target-stm32"))]
+            inner: MaskedCellU64::new(value),
         }
     }
 
