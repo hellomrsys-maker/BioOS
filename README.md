@@ -143,3 +143,24 @@ Measured host FFI round-trip (Windows, 50k samples): `bioos_kernel_step` p50 ≈
 
 ### 3.3 Interactive Medical Flight Deck
 - Open `http://localhost:8090/` in any modern web browser to interact with live telemetry, trigger occlusion and air-in-line spikes, test the CLSI C56-A potassium gate, simulate mass casualty surge, and inspect the 64-byte AMSV cache-line memory grid.
+
+
+---
+
+## 4. Runtime Configuration
+
+All runtime behavior is environment-configurable (see `.env.example`):
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `BIOOS_DB_PATH` | `data/bioos_runtime.db` | SQLite WAL store (telemetry + hash-chained audit) |
+| `BIOOS_TELEMETRY_HZ` | `2` | Background AMSV sampler rate (0 disables) |
+| `BIOOS_MLLP_PORT` | unset | HL7 v2 MLLP listener port (unset = disabled) |
+| `BIOOS_AUTH_REQUIRED` | `0` | `1` enforces RBAC on `/api/*` (UI uses `/api/auth/token`) |
+| `BIOOS_JWT_SECRET` | dev value | Dev HS256 signing secret (never in production) |
+| `BIOOS_SERVICE_API_KEY` | unset | `X-Api-Key` mapped to the SERVICE role |
+| `BIOOS_OIDC_ISSUER` | unset | Hospital OIDC issuer — enables RS256/JWKS verification |
+| `BIOOS_OIDC_AUDIENCE` | unset | Expected `aud` claim when OIDC is configured |
+| `BIOOS_KERNEL_LIB` | auto | Plane A cdylib override (dll/so/dylib auto-resolved) |
+
+Auth resolution order for bearer tokens: **OIDC RS256 (when issuer set) -> dev HS256 -> X-Api-Key**. Route permissions per role are defined in `services/rbac_auth.py`.
