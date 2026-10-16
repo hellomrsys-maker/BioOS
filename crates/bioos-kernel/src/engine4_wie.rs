@@ -3,9 +3,9 @@
 //! Standards: IEC 62304 Class C, ASTM F2761 ICE
 //! 3-State Mealy Automaton, 2ms/12ms dual-stage actuator trips, 50ms heartbeat watchdog.
 
-pub const HEARTBEAT_TIMEOUT_NS: u32 = 50_000_000; // 50 milliseconds in nanoseconds
-pub const SSR_TRIP_LATENCY_MS: u32 = 2;            // Solid-state relay trip <= 2 ms
-pub const MECHANICAL_RELAY_LATENCY_MS: u32 = 12;   // Mechanical relay trip <= 12 ms
+pub const HEARTBEAT_TIMEOUT_NS: u64 = 50_000_000; // 50 milliseconds in nanoseconds
+pub const SSR_TRIP_LATENCY_MS: u32 = 2; // Solid-state relay trip <= 2 ms
+pub const MECHANICAL_RELAY_LATENCY_MS: u32 = 12; // Mechanical relay trip <= 12 ms
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,7 +33,7 @@ pub struct WatchdogTripReport {
 
 pub struct HardwareWatchdogEngine {
     state: WatchdogState,
-    last_heartbeat_ns: u32,
+    last_heartbeat_ns: u64,
 }
 
 impl Default for HardwareWatchdogEngine {
@@ -60,8 +60,8 @@ impl HardwareWatchdogEngine {
     /// Evaluates current telemetry and heartbeat to determine Mealy state transition
     pub fn evaluate_cycle(
         &mut self,
-        current_time_ns: u32,
-        plane_b_heartbeat_ns: u32,
+        current_time_ns: u64,
+        plane_b_heartbeat_ns: u64,
         has_occlusion_trip: bool,
         has_bubble_trip: bool,
         has_pharmacology_lockout: bool,
@@ -70,12 +70,13 @@ impl HardwareWatchdogEngine {
         // Update heartbeat tracking
         self.last_heartbeat_ns = plane_b_heartbeat_ns;
 
-        // Check heartbeat deadline (50 ms)
-        let heartbeat_elapsed = if current_time_ns >= plane_b_heartbeat_ns {
-            current_time_ns - plane_b_heartbeat_ns
-        } else {
-            0
-        };
+        // Check heartbeat deadline (50 ms) on a u64 monotonic nanosecond base.
+        // The original u32 base wrapped every ~4.29 s (fixed 2026-10-16).
+        // wrapping_sub yields correct modular elapsed time across any wrap.
+        // Defense-in-depth: a FUTURE heartbeat timestamp (clock misconfiguration)
+        // produces a huge elapsed and trips the lockout - fail-safe, unlike the
+        // previous saturating_sub which made future stamps look "fresh".
+        let heartbeat_elapsed = current_time_ns.wrapping_sub(plane_b_heartbeat_ns);
 
         let heartbeat_lost = heartbeat_elapsed > HEARTBEAT_TIMEOUT_NS;
 
@@ -110,7 +111,8 @@ impl HardwareWatchdogEngine {
                 relay_action: RelayAction::MaintainPower,
                 ssr_trip_time_ms: 0,
                 mechanical_trip_time_ms: 0,
-                reason: "CAUTION: Parameter near safety boundary. Infusion rate clamped to baseline.",
+                reason:
+                    "CAUTION: Parameter near safety boundary. Infusion rate clamped to baseline.",
             };
         }
 

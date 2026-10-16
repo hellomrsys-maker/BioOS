@@ -3,7 +3,9 @@
 //! Exposes zero-overhead, zero-copy native symbols for physical memory sharing
 //! between the Rust #![no_std] safety kernel and Python/C/Julia layers.
 
-use crate::amsv::{AtomicMemoryStateVector, PhysiologicalEnvelopeVector, SeqlockAmsv, TriPlaneAmsv};
+use crate::amsv::{
+    AtomicMemoryStateVector, PhysiologicalEnvelopeVector, SeqlockAmsv, TriPlaneAmsv,
+};
 use crate::engine1_ese::{EnvironmentalSensorEngine, SensorStatus};
 use crate::engine2_bpe::{BiometricPharmacokineticEngine, PatientBiometrics, Sex};
 use crate::engine3_pve::{DrugIdentifier, PharmacologicalVerificationEngine, VerificationOutcome};
@@ -64,14 +66,19 @@ pub extern "C" fn bioos_amsv_get_raw_ptr() -> *mut AtomicMemoryStateVector {
 /// Returns raw pointer to the complete 128-byte Tri-Plane Dual-Cache-Line Vector
 #[no_mangle]
 pub extern "C" fn bioos_triplane_get_raw_ptr() -> *mut TriPlaneAmsv {
-    unsafe {
-        core::ptr::addr_of_mut!(GLOBAL_TRIPLANE)
-    }
+    // addr_of_mut! is safe: it only forms a raw pointer, no dereference occurs.
+    core::ptr::addr_of_mut!(GLOBAL_TRIPLANE)
 }
 
-/// Executes one cycle of Engine 2: Dynamic Physiological Envelope & Kalman Observer
+/// Executes one cycle of Engine 2: Dynamic Physiological Envelope & Kalman Observer.
+///
+/// # Safety
+///
+/// - `out_alpha_state`, if non-null, must be valid for writes of one `u8`.
+/// - `out_allowed_rate`, if non-null, must be valid for writes of one `f32`.
+/// - Exported C-ABI: C/ctypes callers are outside Rust's safety model.
 #[no_mangle]
-pub extern "C" fn bioos_envelope_step(
+pub unsafe extern "C" fn bioos_envelope_step(
     raw_map_mmhg: f32,
     raw_hr_bpm: f32,
     raw_sbp_mmhg: f32,
@@ -80,20 +87,26 @@ pub extern "C" fn bioos_envelope_step(
     out_alpha_state: *mut u8,
     out_allowed_rate: *mut f32,
 ) -> f32 {
-    let est = unsafe {
+    let est = {
         let env_ref = &mut *core::ptr::addr_of_mut!(GLOBAL_ENVELOPE);
-        env_ref.evaluate_envelope(raw_map_mmhg, raw_hr_bpm, raw_sbp_mmhg, requested_rate_ml_h, dt_seconds)
+        env_ref.evaluate_envelope(
+            raw_map_mmhg,
+            raw_hr_bpm,
+            raw_sbp_mmhg,
+            requested_rate_ml_h,
+            dt_seconds,
+        )
     };
 
     if !out_alpha_state.is_null() {
-        unsafe { *out_alpha_state = est.alpha_floor_state as u8; }
+        *out_alpha_state = est.alpha_floor_state as u8;
     }
     if !out_allowed_rate.is_null() {
-        unsafe { *out_allowed_rate = est.permissible_rate_ceiling; }
+        *out_allowed_rate = est.permissible_rate_ceiling;
     }
 
     // Update Tri-Plane Cache Line 1 directly
-    unsafe {
+    {
         let tri = &mut *core::ptr::addr_of_mut!(GLOBAL_TRIPLANE);
         tri.plane_c.env_seq_ctr = tri.plane_c.env_seq_ctr.wrapping_add(2);
         tri.plane_c.est_map_x10 = (est.estimated_map_mmhg * 10.0) as u16;
@@ -110,15 +123,16 @@ pub extern "C" fn bioos_envelope_step(
 /// Executes a 1000 Hz microkernel cycle directly over shared memory
 #[no_mangle]
 pub extern "C" fn bioos_kernel_step(
-    current_time_ns: u32,
-    plane_b_heartbeat_ns: u32,
+    current_time_ns: u64,
+    plane_b_heartbeat_ns: u64,
     pressure_mmhg: u32,
     bubble_ul: u32,
     h_index: u16,
     k_mmol_l: f32,
 ) -> u8 {
     // 1. Evaluate ESE telemetry
-    let (sensor_status, quality) = EnvironmentalSensorEngine::evaluate_pump_telemetry(pressure_mmhg, bubble_ul);
+    let (sensor_status, quality) =
+        EnvironmentalSensorEngine::evaluate_pump_telemetry(pressure_mmhg, bubble_ul);
     let k_result = EnvironmentalSensorEngine::validate_potassium(k_mmol_l, h_index);
 
     let has_occlusion = sensor_status == SensorStatus::TripOcclusion;
@@ -126,8 +140,10 @@ pub extern "C" fn bioos_kernel_step(
     let is_warning = sensor_status == SensorStatus::SoftWarning;
 
     // 2. Evaluate WIE watchdog
+    // Rust 2024 static_mut_refs: call through a raw pointer derived from
+    // addr_of_mut! instead of implicitly taking &mut to the mutable static.
     let trip_report = unsafe {
-        GLOBAL_WATCHDOG.evaluate_cycle(
+        (*core::ptr::addr_of_mut!(GLOBAL_WATCHDOG)).evaluate_cycle(
             current_time_ns,
             plane_b_heartbeat_ns,
             has_occlusion,
@@ -139,7 +155,10 @@ pub extern "C" fn bioos_kernel_step(
 
     // 3. Update AMSV with atomic Seqlock
     GLOBAL_AMSV.write(|v| {
-        v.t_write_ns = current_time_ns;
+        // AMSV ABI keeps a 32-bit telemetry timestamp (layout frozen at 64 B).
+        // The authoritative timing path is the u64 FFI arguments above; this
+        // field is a low-precision display/telemetry stamp only.
+        v.t_write_ns = current_time_ns as u32;
         v.occlusion_mmhg = pressure_mmhg;
         v.quality_flags = quality | k_result.quality_flags;
         v.hil_h = h_index;
@@ -159,25 +178,38 @@ pub extern "C" fn bioos_kernel_step(
     trip_report.current_state as u8
 }
 
-/// Atomic read of current AMSV state into caller-provided buffer
+/// Atomically reads the current 64-byte AMSV into `dest`.
+///
+/// # Safety
+///
+/// `dest`, if non-null, must be valid for writes of one
+/// `AtomicMemoryStateVector` (64 bytes, 64-byte aligned).
 #[no_mangle]
-pub extern "C" fn bioos_amsv_read_atomic(dest: *mut AtomicMemoryStateVector) {
+pub unsafe extern "C" fn bioos_amsv_read_atomic(dest: *mut AtomicMemoryStateVector) {
     if !dest.is_null() {
         let snapshot = GLOBAL_AMSV.read();
-        unsafe {
-            *dest = snapshot;
-        }
+        *dest = snapshot;
     }
 }
 
-/// CLSI C56-A Potassium validation C-ABI function
+/// CLSI C56-A potassium validation across the C boundary.
+///
+/// # Safety
+///
+/// `out_void`, if non-null, must be valid for writes of one `u8`.
 #[no_mangle]
-pub extern "C" fn bioos_validate_potassium(raw_k: f32, h_index: u16, out_void: *mut u8) -> f32 {
+pub unsafe extern "C" fn bioos_validate_potassium(
+    raw_k: f32,
+    h_index: u16,
+    out_void: *mut u8,
+) -> f32 {
     let res = EnvironmentalSensorEngine::validate_potassium(raw_k, h_index);
     if !out_void.is_null() {
-        unsafe {
-            *out_void = if res.status == SensorStatus::HemolysisVoid { 1 } else { 0 };
-        }
+        *out_void = if res.status == SensorStatus::HemolysisVoid {
+            1
+        } else {
+            0
+        };
     }
     res.value_mmol_l
 }

@@ -886,6 +886,12 @@ body {
   box-shadow: 0 0 25px rgba(255, 23, 68, 0.25);
 }
 
+.alpha-floor-card.stall {
+  border-left-color: var(--color-crimson);
+  background: rgba(255, 23, 68, 0.08);
+  box-shadow: 0 0 25px rgba(255, 23, 68, 0.25);
+}
+
 .amsv-hex-grid {
   display: grid;
   grid-template-columns: repeat(32, 1fr);
@@ -1592,3 +1598,105 @@ body {
 
 
 
+
+/* Clinical Early Warning (NEWS2) panel */
+.ews-chip-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.ews-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.ews-form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: #8b9bb4;
+}
+
+.ews-form-grid input,
+.ews-form-grid select {
+  background: rgba(10, 18, 32, 0.8);
+  border: 1px solid rgba(90, 130, 180, 0.35);
+  color: #e8eef7;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 0.85rem;
+}
+
+.ews-form-grid label.ews-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.ews-form-grid label.ews-check input {
+  width: 16px;
+  height: 16px;
+  accent-color: #d4a017;
+}
+
+/* ============================================================= */
+/* Clinical Early Warning (NEWS2) Console - Sprint 7 additions   */
+/* ============================================================= */
+
+.ews-chip-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.ews-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px 16px;
+  margin: 12px 0;
+}
+
+.ews-form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: var(--color-text-dim, #9fb3c8);
+}
+
+.ews-form-grid input,
+.ews-form-grid select {
+  background: rgba(10, 22, 34, 0.8);
+  border: 1px solid rgba(120, 180, 220, 0.25);
+  color: var(--color-text, #e6f1ff);
+  padding: 8px 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  border-radius: 4px;
+}
+
+.ews-form-grid input:focus,
+.ews-form-grid select:focus {
+  outline: none;
+  border-color: var(--color-cyan, #38bdf8);
+}
+
+.ews-form-grid .ews-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  align-self: end;
+  padding-bottom: 8px;
+}
+
+.renal-alert-box { padding: 12px 14px; border: 1px solid rgba(90, 140, 200, 0.3); border-radius: 8px; background: rgba(8, 16, 30, 0.5); }
+
+.renal-alert-box.locked { border-color: var(--color-crimson); background: rgba(60, 8, 16, 0.35); }

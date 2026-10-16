@@ -1,0 +1,8 @@
+# BioOS Python Services — pinned dependencies
+# Safety-critical supply chain policy: every direct dependency is version-pinned
+# for reproducible, auditable builds. Renew pins deliberately, never transitively.
+fastapi==0.137.2
+uvicorn==0.49.0
+anyio==4.14.0
+pytest==9.1.0
+pytest-asyncio==1.4.0

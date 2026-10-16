@@ -49,7 +49,9 @@ impl MedicalBusController {
         }
     }
 
-    pub fn transmit_frame(&mut self, frame: &CanFrame) -> bool {
+    // Simulated bus: models transmission outcome only. When a real
+    // transceiver HAL is wired, serialize `frame` onto the physical bus here.
+    pub fn transmit_frame(&mut self, _frame: &CanFrame) -> bool {
         if self.fault_injected || self.status == BusStatus::BusOffError {
             self.bus_error_count += 1;
             return false;

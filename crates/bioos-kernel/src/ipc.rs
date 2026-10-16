@@ -21,6 +21,12 @@ pub struct SpscRingBuffer {
     tail: AtomicUsize, // Written by Consumer
 }
 
+impl Default for SpscRingBuffer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SpscRingBuffer {
     pub const fn new() -> Self {
         Self {

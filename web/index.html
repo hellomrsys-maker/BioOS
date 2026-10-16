@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -48,11 +48,12 @@
 
   <!-- Enterprise Navigation Tabs -->
   <nav class="enterprise-nav-tabs" aria-label="Hospital Operating Consoles">
-    <button class="nav-tab active" id="tabBedBoard" onclick="switchView('BED_BOARD')">🏥 1. Master Bed Board (78 Beds)</button>
-    <button class="nav-tab" id="tabBedsideDeck" onclick="switchView('BEDSIDE_DECK')">⚡ 2. Bedside Safety Flight Deck</button>
-    <button class="nav-tab" id="tabPharmacy" onclick="switchView('PHARMACY')">💊 3. Pharmacy &amp; NTI Surveillance</button>
-    <button class="nav-tab" id="tabWorkforce" onclick="switchView('WORKFORCE')">🩺 4. Workforce &amp; Wellbeing Roster</button>
-    <button class="nav-tab" id="tabTerminal" onclick="switchView('TERMINAL')">&gt;_ 5. Microkernel Shell (bioos-ctl)</button>
+    <button class="nav-tab active" id="tabBedBoard" onclick="switchView('BED_BOARD')">ðŸ¥ 1. Master Bed Board (78 Beds)</button>
+    <button class="nav-tab" id="tabBedsideDeck" onclick="switchView('BEDSIDE_DECK')">âš¡ 2. Bedside Safety Flight Deck</button>
+    <button class="nav-tab" id="tabPharmacy" onclick="switchView('PHARMACY')">ðŸ’Š 3. Pharmacy &amp; NTI Surveillance</button>
+    <button class="nav-tab" id="tabWorkforce" onclick="switchView('WORKFORCE')">ðŸ©º 4. Workforce &amp; Wellbeing Roster</button>
+    <button class="nav-tab" id="tabEarlyWarning" onclick="switchView('EARLY_WARNING')">5. Clinical Early Warning (NEWS2)</button>
+    <button class="nav-tab" id="tabTerminal" onclick="switchView('TERMINAL')">&gt;_ 6. Microkernel Shell (bioos-ctl)</button>
   </nav>
 
   <!-- Persistent Active Monitored Patient Banner -->
@@ -160,6 +161,29 @@
           </div>
         </div>
 
+        <!-- Renal Clearance & NTI Pharmacy Check -->
+        <div class="card">
+          <div class="card-title-row">
+            <span class="card-title">Renal Clearance & NTI Check (CKD-EPI 2021 / Metformin)</span>
+            <span class="pill-metric" id="egfrPill">eGFR: 68 mL/min</span>
+          </div>
+          <div class="ews-form-grid">
+            <label>Serum Creatinine <input id="serumCrInput" type="number" min="0.2" max="12" step="0.1" value="1.1" oninput="recalculateBiometrics()"></label>
+            <label>Age <input id="patientAgeInput" type="number" min="1" max="120" value="65" oninput="recalculateBiometrics()"></label>
+            <label>Sex
+              <select id="patientSexSelect" onchange="recalculateBiometrics()">
+                <option>Male</option>
+                <option>Female</option>
+              </select>
+            </label>
+            <label>Weight (kg) <input id="patientWeightInput" type="number" min="20" max="250" value="84" oninput="recalculateBiometrics()"></label>
+          </div>
+          <div class="nti-check-result" id="ntiCheckResult">
+            <strong id="metforminResultText" class="text-success">APPROVED (eGFR >= 45)</strong>
+            <p id="metforminDetailText">Metformin permissible per Dettli renal ceiling law.</p>
+          </div>
+        </div>
+
         <!-- Aerospace Dual-Engine Telemetry Comparison -->
         <div class="card engine-compare-card">
           <div class="card-title-row">
@@ -216,7 +240,7 @@
         </div>
 
         <!-- Alpha-Floor Stall Card -->
-        <div class="card alpha-floor-card" id="alphaFloorCard">
+        <div class="card alpha-floor-card envelope-card" id="alphaFloorCard">
           <div class="card-title-row">
             <span class="card-title">Hemodynamic Alpha-Floor Envelope (Airbus Analogy)</span>
             <span class="state-indicator" id="alphaFloorStateBadge">NORMAL FLIGHT</span>
@@ -242,6 +266,12 @@
             </div>
           </div>
 
+          <div class="control-row">
+            <span class="pill-metric" id="kalmanMapDisplay">Kalman MAP: 80.0 mmHg</span>
+            <span class="pill-metric" id="kalmanDmapDisplay">d(MAP)/dt: +0.0 mmHg/s</span>
+            <span class="pill-metric" id="shockIndexDisplay">Shock Index: 0.7</span>
+            <span class="pill-metric relay-status active" id="allowedRateDisplay">125.0 mL/h</span>
+          </div>
           <div class="action-buttons-row">
             <button class="action-btn warning-btn" onclick="simulateHemodynamicStall()">Trigger Hemodynamic Stall (MAP 42 mmHg)</button>
             <button class="action-btn reset-btn" onclick="recoverFromStall()">Execute Alpha-Floor Recovery</button>
@@ -249,7 +279,7 @@
         </div>
 
         <!-- CLSI C56-A Hemolysis Gate -->
-        <div class="card lab-card">
+        <div class="card lab-card" id="kResultCard">
           <div class="card-title-row">
             <span class="card-title">CLSI C56-A Potassium Hemolysis Gate</span>
             <span class="pill-metric" id="kStatusPill">VALID</span>
@@ -261,6 +291,13 @@
           <div class="control-row">
             <label for="kSlider">Serum Potassium [K+]: <strong id="kValDisplay">4.40 mEq/L</strong> (Target: 3.5 - 5.0)</label>
             <input type="range" id="kSlider" min="2.0" max="8.0" step="0.1" value="4.4" class="slider" oninput="updatePotassium(this.value)">
+
+          <div class="stall-warning-box" id="kStatusBox">
+            <div class="stall-text">
+              <strong id="kStatusBadge">POTASSIUM GATE: VALID</strong>
+              <p>Serum K+ validated against CLSI C56-A hemolysis interference thresholds.</p>
+            </div>
+          </div>
           </div>
           <div class="gate-status-box" id="gateStatusBox">CLSI C56-A Specimen Integrity: Acceptable. Potassium reading approved for closed-loop titrations.</div>
         </div>
@@ -471,6 +508,94 @@
   </section>
 
   <!-- VIEW 5: BIOOS MICROKERNEL TERMINAL (bioos-ctl) -->
+
+
+
+
+
+
+
+
+  <!-- 5. Clinical Early Warning (NEWS2) -->
+  <section class="hospital-view" id="viewEarlyWarning">
+    <div class="view-header-row">
+      <div>
+        <h2 class="view-title">Clinical Early Warning &mdash; RCP NEWS2 (December 2017)</h2>
+        <p class="view-sub">Deterioration trajectory detection &bull; rise &ge; 2 &rArr; urgent review &bull; sustained &ge; 3 &rArr; escalation review &bull; &ge; 7 &rArr; emergency response &bull; advisory only</p>
+      </div>
+      <span class="pill-metric text-info" id="ewsMonitoredCount">0 Patients</span>
+    </div>
+
+    <div class="ews-chip-row">
+      <span class="stat-pill" id="ewsLowChip">LOW: 0</span>
+      <span class="stat-pill text-warning" id="ewsMediumChip">MEDIUM: 0</span>
+      <span class="stat-pill text-danger" id="ewsHighChip">HIGH: 0</span>
+    </div>
+
+    <div class="card">
+      <div class="card-title-row">
+        <span class="card-title">Census Deterioration Matrix (Scale-1 advisory defaults)</span>
+        <span class="pill-metric" id="ewsTrendObsCount">0 Trend Obs</span>
+      </div>
+      <div class="engine-table-wrapper">
+        <table class="engine-compare-table">
+          <thead>
+            <tr>
+              <th>Bed</th>
+              <th>Patient</th>
+              <th>Ward</th>
+              <th>NEWS2</th>
+              <th>Clinical Risk</th>
+              <th>Trend Obs</th>
+            </tr>
+          </thead>
+          <tbody id="ewsPatientsBody">
+            <tr><td colspan="6">Loading census deterioration matrix...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title-row">
+        <span class="card-title">Record Clinical Observation (closes hazard H-11)</span>
+        <span class="pill-metric text-info">Overrides > census defaults</span>
+      </div>
+      <div class="ews-form-grid">
+        <label>Patient
+          <select id="ewsPatientSelect"><option value="">Loading census...</option></select>
+        </label>
+        <label>Resp Rate <input id="ewsRR" type="number" min="1" max="119" placeholder="auto"></label>
+        <label>SpO2 % <input id="ewsSpO2" type="number" min="1" max="100" step="0.1" placeholder="auto"></label>
+        <label>SpO2 Scale
+          <select id="ewsScale">
+            <option value="1">Scale 1 (target &ge; 96%)</option>
+            <option value="2">Scale 2 (COPD 88-92%)</option>
+          </select>
+        </label>
+        <label>Systolic BP <input id="ewsSBP" type="number" min="31" max="399" placeholder="auto"></label>
+        <label>Pulse <input id="ewsPulse" type="number" min="1" max="349" placeholder="auto"></label>
+        <label>Temp &deg;C <input id="ewsTemp" type="number" min="25" max="45" step="0.1" placeholder="auto"></label>
+        <label class="ews-check"><input id="ewsO2" type="checkbox"> Supplemental O2</label>
+        <label class="ews-check"><input id="ewsAlertState" type="checkbox"> New CVPU (not Alert)</label>
+      </div>
+      <div class="quick-action-buttons">
+        <button class="action-btn" onclick="submitNews2Observation()">Record Observation &rarr; Trend</button>
+      </div>
+      <div class="trip-message-box" id="ewsResultBox">Fields left blank inherit census defaults &mdash; every defaulted field is flagged (defaults_used) and audit-logged.</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title-row">
+        <span class="card-title">Trajectory Alert Feed (hash-chained audit)</span>
+        <span class="pill-metric text-warning" id="ewsAlertCount">0 Alerts</span>
+      </div>
+      <div class="ddi-alerts-container" id="ewsAlertFeed">
+        <div class="stat-pill text-success">No trajectory alerts recorded this session.</div>
+      </div>
+    </div>
+  </section>
+
   <section class="hospital-view" id="viewTerminal">
     <div class="kernel-terminal-section full-terminal">
       <div class="terminal-header-bar">

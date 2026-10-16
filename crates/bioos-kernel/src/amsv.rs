@@ -96,20 +96,20 @@ const _: () = assert!(core::mem::align_of::<AtomicMemoryStateVector>() == 64);
 #[repr(C, align(64))]
 #[derive(Debug, Clone, Copy)]
 pub struct PhysiologicalEnvelopeVector {
-    pub env_seq_ctr: u64,                // 0x00..0x07: Seqlock counter for Envelope (8 bytes)
-    pub env_checksum: u64,               // 0x08..0x0F: Integrity signature (8 bytes)
-    pub permissible_rate_x10: u32,       // 0x10..0x13: Dynamically allowed rate (mL/h * 10) (4 bytes)
-    pub kalman_variance_p00_x100: u32,   // 0x14..0x17: Kalman state uncertainty (4 bytes)
-    pub kalman_variance_p11_x100: u32,   // 0x18..0x1B: Kalman velocity uncertainty (4 bytes)
-    pub est_map_x10: u16,                // 0x1C..0x1D: Estimated MAP (mmHg * 10) (2 bytes)
-    pub est_hr_x10: u16,                 // 0x1E..0x1F: Estimated Heart Rate (bpm * 10) (2 bytes)
-    pub shock_index_x100: u16,           // 0x20..0x21: Shock Index (HR/SBP * 100) (2 bytes)
-    pub d_map_dt_x100: i16,              // 0x22..0x23: Rate of MAP change (mmHg/s * 100) (2 bytes)
-    pub dynamic_margin_x100: u16,        // 0x24..0x25: Physiological margin % (2 bytes)
-    pub env_crc16: u16,                  // 0x26..0x27: CRC-16 checksum (2 bytes)
-    pub alpha_floor_state: u8,           // 0x28: 0=Nominal, 1=SoftClamp, 2=StallEmergency (1 byte)
-    pub slew_clamped: u8,                // 0x29: 1 if rate acceleration was clamped (1 byte)
-    pub reserved: [u8; 22],              // 0x2A..0x3F: Future expansion buffer (22 bytes)
+    pub env_seq_ctr: u64,  // 0x00..0x07: Seqlock counter for Envelope (8 bytes)
+    pub env_checksum: u64, // 0x08..0x0F: Integrity signature (8 bytes)
+    pub permissible_rate_x10: u32, // 0x10..0x13: Dynamically allowed rate (mL/h * 10) (4 bytes)
+    pub kalman_variance_p00_x100: u32, // 0x14..0x17: Kalman state uncertainty (4 bytes)
+    pub kalman_variance_p11_x100: u32, // 0x18..0x1B: Kalman velocity uncertainty (4 bytes)
+    pub est_map_x10: u16,  // 0x1C..0x1D: Estimated MAP (mmHg * 10) (2 bytes)
+    pub est_hr_x10: u16,   // 0x1E..0x1F: Estimated Heart Rate (bpm * 10) (2 bytes)
+    pub shock_index_x100: u16, // 0x20..0x21: Shock Index (HR/SBP * 100) (2 bytes)
+    pub d_map_dt_x100: i16, // 0x22..0x23: Rate of MAP change (mmHg/s * 100) (2 bytes)
+    pub dynamic_margin_x100: u16, // 0x24..0x25: Physiological margin % (2 bytes)
+    pub env_crc16: u16,    // 0x26..0x27: CRC-16 checksum (2 bytes)
+    pub alpha_floor_state: u8, // 0x28: 0=Nominal, 1=SoftClamp, 2=StallEmergency (1 byte)
+    pub slew_clamped: u8,  // 0x29: 1 if rate acceleration was clamped (1 byte)
+    pub reserved: [u8; 22], // 0x2A..0x3F: Future expansion buffer (22 bytes)
 }
 
 const _: () = assert!(core::mem::size_of::<PhysiologicalEnvelopeVector>() == 64);
@@ -117,9 +117,9 @@ const _: () = assert!(core::mem::align_of::<PhysiologicalEnvelopeVector>() == 64
 
 /// Exactly 128-Byte Tri-Plane Dual-Cache-Line State Vector
 #[repr(C, align(64))]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct TriPlaneAmsv {
-    pub plane_a: AtomicMemoryStateVector,     // Cache Line 0 (64 bytes): Engine 1 Actuation & Watchdog
+    pub plane_a: AtomicMemoryStateVector, // Cache Line 0 (64 bytes): Engine 1 Actuation & Watchdog
     pub plane_c: PhysiologicalEnvelopeVector, // Cache Line 1 (64 bytes): Engine 2 Dynamic Envelope & Kalman
 }
 
@@ -134,8 +134,8 @@ impl Default for PhysiologicalEnvelopeVector {
             permissible_rate_x10: 1250, // 125.0 mL/h
             kalman_variance_p00_x100: 100,
             kalman_variance_p11_x100: 100,
-            est_map_x10: 800, // 80.0 mmHg
-            est_hr_x10: 750,  // 75.0 bpm
+            est_map_x10: 800,     // 80.0 mmHg
+            est_hr_x10: 750,      // 75.0 bpm
             shock_index_x100: 62, // 0.62
             d_map_dt_x100: 0,
             dynamic_margin_x100: 1000,
@@ -143,15 +143,6 @@ impl Default for PhysiologicalEnvelopeVector {
             alpha_floor_state: 0,
             slew_clamped: 0,
             reserved: [0; 22],
-        }
-    }
-}
-
-impl Default for TriPlaneAmsv {
-    fn default() -> Self {
-        Self {
-            plane_a: AtomicMemoryStateVector::default(),
-            plane_c: PhysiologicalEnvelopeVector::default(),
         }
     }
 }
@@ -188,10 +179,7 @@ impl AtomicMemoryStateVector {
     pub fn compute_crc16(&self) -> u16 {
         let mut crc: u16 = 0xFFFF;
         let bytes: &[u8] = unsafe {
-            core::slice::from_raw_parts(
-                (self as *const Self as *const u8).add(8),
-                0x2E - 8,
-            )
+            core::slice::from_raw_parts((self as *const Self as *const u8).add(8), 0x2E - 8)
         };
         for &byte in bytes {
             crc ^= (byte as u16) << 8;
@@ -219,6 +207,12 @@ pub struct SeqlockAmsv {
 
 unsafe impl Sync for SeqlockAmsv {}
 unsafe impl Send for SeqlockAmsv {}
+
+impl Default for SeqlockAmsv {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl SeqlockAmsv {
     pub const fn new() -> Self {

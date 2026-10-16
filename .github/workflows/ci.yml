@@ -1,0 +1,56 @@
+name: BioOS CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  rust-kernel:
+    name: Plane A Safety Kernel (Rust)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Format gate (zero diffs allowed)
+        run: cargo fmt --manifest-path crates/bioos-kernel/Cargo.toml -- --check
+
+      - name: Clippy gate (zero warnings allowed)
+        run: cargo clippy --manifest-path crates/bioos-kernel/Cargo.toml -- -D warnings
+
+      - name: Linux release cdylib (verifies libbioos_kernel.so path used by containers)
+        run: cargo build --release --manifest-path crates/bioos-kernel/Cargo.toml
+
+      - name: Install Cortex-M target
+        run: rustup target add thumbv7em-none-eabihf
+
+      - name: no_std embedded build gate (Cortex-M4F)
+        run: cargo build --lib --no-default-features --features no_std --target thumbv7em-none-eabihf --manifest-path crates/bioos-kernel/Cargo.toml
+
+      - name: Unit tests
+        run: cargo test --manifest-path crates/bioos-kernel/Cargo.toml
+
+  python-services:
+    name: Plane B / Enterprise Services (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pinned dependencies
+        run: pip install -r requirements.txt
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build kernel cdylib (required by kernel_bridge via libbioos_kernel.so)
+        run: cargo build --release --manifest-path crates/bioos-kernel/Cargo.toml
+
+      - name: Service + bridge tests
+        run: python -m pytest services/test_services.py services/test_kernel_bridge.py -v

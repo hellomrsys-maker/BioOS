@@ -10,18 +10,31 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+// no_std panic policy: latch-and-spin. A certified on-target build (P2) MUST
+// replace this with a handler that first drives the watchdog into
+// HardwareLockout and cuts actuator power, then halts. Application crates that
+// install their own panic handler should disable this one via a cargo feature.
+#[cfg(not(feature = "std"))]
+#[panic_handler]
+fn bioos_panic(_info: &core::panic::PanicInfo) -> ! {
+    loop {
+        core::hint::spin_loop();
+    }
+}
+
 pub mod amsv;
+pub mod drivers;
 pub mod engine1_ese;
 pub mod engine2_bpe;
 pub mod engine3_pve;
 pub mod engine4_wie;
 pub mod engine_envelope;
 pub mod ffi;
-pub mod scheduler;
+pub mod hal;
 pub mod ipc;
 pub mod mm;
-pub mod hal;
-pub mod drivers;
+pub mod portable_atomic;
+pub mod scheduler;
 
 pub use amsv::{
     quality_flags, AlarmClass, AtomicMemoryStateVector, DeviceClass, GlobalOperatingMode,
@@ -31,16 +44,14 @@ pub use engine1_ese::{
     EnvironmentalSensorEngine, PotassiumValidationResult, SensorStatus, AIR_BUBBLE_MAX_UL,
     HEMOLYSIS_THRESHOLD_INDEX, MAX_OCCLUSION_PRESSURE_MMHG,
 };
-pub use engine2_bpe::{
-    BiometricPharmacokineticEngine, ChildPughClass, PatientBiometrics, Sex,
-};
+pub use engine2_bpe::{BiometricPharmacokineticEngine, ChildPughClass, PatientBiometrics, Sex};
 pub use engine3_pve::{
-    DosingVerificationReport, DrugIdentifier, PharmacologicalVerificationEngine,
-    TisdaleScoreInput, VerificationOutcome,
+    DosingVerificationReport, DrugIdentifier, PharmacologicalVerificationEngine, TisdaleScoreInput,
+    VerificationOutcome,
 };
 pub use engine4_wie::{
-    HardwareWatchdogEngine, RelayAction, WatchdogState, WatchdogTripReport,
-    HEARTBEAT_TIMEOUT_NS, MECHANICAL_RELAY_LATENCY_MS, SSR_TRIP_LATENCY_MS,
+    HardwareWatchdogEngine, RelayAction, WatchdogState, WatchdogTripReport, HEARTBEAT_TIMEOUT_NS,
+    MECHANICAL_RELAY_LATENCY_MS, SSR_TRIP_LATENCY_MS,
 };
 pub use engine_envelope::{
     AlphaFloorState, KalmanStateEstimate, PhysiologicalEnvelopeEngine, PhysiologicalKalmanFilter,
@@ -92,12 +103,19 @@ mod tests {
         // Occlusion pressure above 10.2 psi (525 mmHg)
         let (status_occ, flags_occ) = EnvironmentalSensorEngine::evaluate_pump_telemetry(530, 5);
         assert_eq!(status_occ, SensorStatus::TripOcclusion);
-        assert_eq!(flags_occ & quality_flags::OCCLUSION_DETECTED, quality_flags::OCCLUSION_DETECTED);
+        assert_eq!(
+            flags_occ & quality_flags::OCCLUSION_DETECTED,
+            quality_flags::OCCLUSION_DETECTED
+        );
 
         // Bubble >= 25 uL
-        let (status_bubble, flags_bubble) = EnvironmentalSensorEngine::evaluate_pump_telemetry(120, 26);
+        let (status_bubble, flags_bubble) =
+            EnvironmentalSensorEngine::evaluate_pump_telemetry(120, 26);
         assert_eq!(status_bubble, SensorStatus::TripAirBubble);
-        assert_eq!(flags_bubble & quality_flags::AIR_BUBBLE_DETECTED, quality_flags::AIR_BUBBLE_DETECTED);
+        assert_eq!(
+            flags_bubble & quality_flags::AIR_BUBBLE_DETECTED,
+            quality_flags::AIR_BUBBLE_DETECTED
+        );
     }
 
     #[test]
@@ -111,10 +129,18 @@ mod tests {
         };
 
         let egfr = BiometricPharmacokineticEngine::calculate_ckd_epi_2021(&bio);
-        assert!(egfr > 55.0 && egfr < 75.0, "eGFR out of expected range: {}", egfr);
+        assert!(
+            egfr > 55.0 && egfr < 75.0,
+            "eGFR out of expected range: {}",
+            egfr
+        );
 
         let crcl = BiometricPharmacokineticEngine::calculate_cockcroft_gault(&bio);
-        assert!(crcl > 50.0 && crcl < 80.0, "CrCl out of expected range: {}", crcl);
+        assert!(
+            crcl > 50.0 && crcl < 80.0,
+            "CrCl out of expected range: {}",
+            crcl
+        );
     }
 
     #[test]
@@ -128,7 +154,10 @@ mod tests {
             4.0,
         );
 
-        assert_eq!(report.outcome, VerificationOutcome::HardLockoutContraindicated);
+        assert_eq!(
+            report.outcome,
+            VerificationOutcome::HardLockoutContraindicated
+        );
         assert_eq!(report.sanctioned_ceiling_dose, 0.0);
         assert!(report.lockout_reason.is_some());
     }
@@ -136,15 +165,15 @@ mod tests {
     #[test]
     fn test_tisdale_qtc_risk_lockout() {
         let input = TisdaleScoreInput {
-            age_gte_68: true,                     // 1 pt
-            female_sex: true,                     // 1 pt
-            loop_diuretic: true,                  // 1 pt
-            serum_k_lte_3_5: true,                // 2 pts
-            baseline_qtc_gte_450: true,           // 2 pts
+            age_gte_68: true,           // 1 pt
+            female_sex: true,           // 1 pt
+            loop_diuretic: true,        // 1 pt
+            serum_k_lte_3_5: true,      // 2 pts
+            baseline_qtc_gte_450: true, // 2 pts
             acute_myocardial_infarction: false,
-            sepsis: true,                         // 3 pts
+            sepsis: true, // 3 pts
             heart_failure: false,
-            qtc_prolonging_drugs_count: 2,        // 6 pts -> Total = 16 points (> 11)
+            qtc_prolonging_drugs_count: 2, // 6 pts -> Total = 16 points (> 11)
         };
 
         let (score, text) = PharmacologicalVerificationEngine::calculate_tisdale_score(&input);
@@ -164,9 +193,37 @@ mod tests {
         // Heartbeat timeout (> 50 ms elapsed)
         let timeout_report = wie.evaluate_cycle(75_000_000, 10_000_000, false, false, false, false);
         assert_eq!(timeout_report.current_state, WatchdogState::HardwareLockout);
-        assert_eq!(timeout_report.relay_action, RelayAction::TripBothRelaysMechanicalAirGap);
+        assert_eq!(
+            timeout_report.relay_action,
+            RelayAction::TripBothRelaysMechanicalAirGap
+        );
         assert_eq!(timeout_report.ssr_trip_time_ms, SSR_TRIP_LATENCY_MS);
-        assert_eq!(timeout_report.mechanical_trip_time_ms, MECHANICAL_RELAY_LATENCY_MS);
+        assert_eq!(
+            timeout_report.mechanical_trip_time_ms,
+            MECHANICAL_RELAY_LATENCY_MS
+        );
+    }
+
+    #[test]
+    fn test_wie_watchdog_u64_time_base_wrap_safety() {
+        let mut wie = HardwareWatchdogEngine::new();
+
+        // Fresh heartbeat 1 ms BEFORE the u64 wrap; current time 4 ms AFTER.
+        // Modular elapsed = 5 ms < 50 ms -> must stay Normal. The original u32
+        // base wrapped every ~4.29 s and saturating_sub mis-scored such gaps.
+        let report =
+            wie.evaluate_cycle(4_000_000, u64::MAX - 1_000_000, false, false, false, false);
+        assert_eq!(report.current_state, WatchdogState::Normal);
+
+        // Heartbeat 5 ms before wrap, current 56 ms after -> elapsed ~61 ms > 50 ms.
+        let report =
+            wie.evaluate_cycle(56_000_000, u64::MAX - 5_000_000, false, false, false, false);
+        assert_eq!(report.current_state, WatchdogState::HardwareLockout);
+
+        // Fail-safe direction: a FUTURE heartbeat stamp is treated as lost,
+        // never as "fresh" (old saturating_sub behavior was fail-unsafe).
+        let report = wie.evaluate_cycle(1_000_000, 2_000_000, false, false, false, false);
+        assert_eq!(report.current_state, WatchdogState::HardwareLockout);
     }
 
     #[test]
@@ -188,7 +245,10 @@ mod tests {
 
         // 2. Hemodynamic crash (MAP plunges to 45 mmHg)
         let stall = envelope.evaluate_envelope(45.0, 130.0, 60.0, 125.0, 0.1);
-        assert_eq!(stall.alpha_floor_state, AlphaFloorState::HemodynamicStallEmergency);
+        assert_eq!(
+            stall.alpha_floor_state,
+            AlphaFloorState::HemodynamicStallEmergency
+        );
         assert_eq!(stall.permissible_rate_ceiling, 0.0); // Hard clamp to 0
     }
 
@@ -198,9 +258,23 @@ mod tests {
         let mut sched = RealTimeScheduler::new();
 
         // Register 1000 Hz critical actuator task
-        assert!(sched.register_task(0, 1, "ACTUATOR_1KHZ", TaskPriority::Critical1000Hz, 1_000_000, 1_000_000));
+        assert!(sched.register_task(
+            0,
+            1,
+            "ACTUATOR_1KHZ",
+            TaskPriority::Critical1000Hz,
+            1_000_000,
+            1_000_000
+        ));
         // Register 100 Hz Kalman envelope task
-        assert!(sched.register_task(1, 2, "ENVELOPE_100HZ", TaskPriority::Envelope100Hz, 10_000_000, 10_000_000));
+        assert!(sched.register_task(
+            1,
+            2,
+            "ENVELOPE_100HZ",
+            TaskPriority::Envelope100Hz,
+            10_000_000,
+            10_000_000
+        ));
 
         // Initial cycle at t = 1_000_000 ns -> Highest priority task (ACTUATOR_1KHZ) must dispatch
         let next = sched.schedule_next(1_000_000);
@@ -213,7 +287,7 @@ mod tests {
 
     #[test]
     fn test_spsc_ring_buffer_wait_free_ipc() {
-        use crate::ipc::{SpscRingBuffer, IpcMessage};
+        use crate::ipc::{IpcMessage, SpscRingBuffer};
         let mut ring = SpscRingBuffer::new();
         assert!(ring.is_empty());
 
@@ -240,7 +314,7 @@ mod tests {
         assert_eq!(pool.allocated_count, 0);
 
         let b1 = pool.alloc().expect("Block 1 allocation");
-        let b2 = pool.alloc().expect("Block 2 allocation");
+        let _b2 = pool.alloc().expect("Block 2 allocation");
         assert_eq!(pool.allocated_count, 2);
 
         // Free b1 and re-allocate
@@ -252,11 +326,16 @@ mod tests {
 
     #[test]
     fn test_hal_medical_bus_and_fault_injection() {
-        use crate::hal::{MedicalBusController, BusType, BusStatus, CanFrame};
+        use crate::hal::{BusStatus, BusType, CanFrame, MedicalBusController};
         let mut bus = MedicalBusController::new(BusType::CanBusMedical, 500_000);
         assert_eq!(bus.status, BusStatus::Online);
 
-        let frame = CanFrame { can_id: 0x120, dlc: 8, data: [0; 8], timestamp_us: 100 };
+        let frame = CanFrame {
+            can_id: 0x120,
+            dlc: 8,
+            data: [0; 8],
+            timestamp_us: 100,
+        };
         assert!(bus.transmit_frame(&frame));
         assert_eq!(bus.tx_frames_count, 1);
 
@@ -273,10 +352,10 @@ mod tests {
 
     #[test]
     fn test_medical_device_drivers_ders_and_alarms() {
-        use crate::drivers::infusion_pump::InfusionPumpDriver;
-        use crate::drivers::ventilator::MechanicalVentilatorDriver;
-        use crate::drivers::patient_monitor::PatientMonitorDriver;
         use crate::drivers::analyzer::LabAnalyzerDriver;
+        use crate::drivers::infusion_pump::InfusionPumpDriver;
+        use crate::drivers::patient_monitor::PatientMonitorDriver;
+        use crate::drivers::ventilator::MechanicalVentilatorDriver;
 
         // 1. Infusion Pump DERS Hard Clamp
         let mut pump = InfusionPumpDriver::new(101, 200.0, 300);
@@ -305,4 +384,3 @@ mod tests {
         assert!(analyzer.is_specimen_rejected);
     }
 }
-

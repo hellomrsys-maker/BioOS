@@ -93,7 +93,8 @@ impl BiometricPharmacokineticEngine {
             Sex::Female => 0.85,
         };
 
-        let crcl = ((140.0 - bio.age_years) * dosing_weight) / (72.0 * bio.serum_creatinine_mg_dl) * sex_factor;
+        let crcl = ((140.0 - bio.age_years) * dosing_weight) / (72.0 * bio.serum_creatinine_mg_dl)
+            * sex_factor;
         if crcl < 0.0 {
             0.0
         } else {
@@ -178,7 +179,7 @@ impl BiometricPharmacokineticEngine {
 
     /// Immunocompromise Risk Multiplier (kappa_immuno)
     pub fn calculate_immuno_multiplier(
-        anc: f32,                  // Absolute Neutrophil Count (/uL)
+        anc: f32, // Absolute Neutrophil Count (/uL)
         has_organ_transplant: bool,
         high_dose_steroids: bool,
         albumin_g_dl: f32,

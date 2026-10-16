@@ -1,4 +1,4 @@
-// BioOS Flight Deck Reactive Application Engine
+﻿// BioOS Flight Deck Reactive Application Engine
 // Standard Compliance: IEC 62304 Class C, ASTM F2761, ISO/IEEE 11073 SDC
 // Tri-Plane Aerospace Architecture: Engine 1 (Actuation) + Engine 2 (Kalman Envelope) + Engine 3 (Cognitive FMS)
 
@@ -97,10 +97,10 @@ function updateHemolysis(val) {
   state.hemolysisIndex = parseInt(val, 10);
   document.getElementById('hIndexDisplay').textContent = `${state.hemolysisIndex} mg/dL`;
 
-  const kResultDisplay = document.getElementById('kResultDisplay');
-  const kNumberDisplay = document.getElementById('kNumberDisplay');
-  const kStatusBox = document.getElementById('kStatusBox');
-  const kStatusBadge = document.getElementById('kStatusBadge');
+  const kResultCard = document.getElementById('kResultCard');
+  const kNumberDisplay = document.getElementById('kValDisplay');
+  const kStatusBox = document.getElementById('gateStatusBox');
+  const kStatusBadge = document.getElementById('kStatusPill');
 
   if (state.hemolysisIndex > 20) {
     kNumberDisplay.textContent = 'VOID (NaN)';
@@ -111,7 +111,7 @@ function updateHemolysis(val) {
       <span class="status-indicator-tag red">CLSI C56-A VOID</span>
       <span class="status-sub text-danger">H-index > 20. Cardiac arrest prevention interlock active.</span>
     `;
-    kResultDisplay.style.borderColor = 'var(--color-crimson)';
+    kResultCard.style.borderColor = 'var(--color-crimson)';
   } else {
     kNumberDisplay.textContent = `${state.potassiumVal.toFixed(2)} mmol/L`;
     kNumberDisplay.style.color = 'var(--color-cyan)';
@@ -121,7 +121,7 @@ function updateHemolysis(val) {
       <span class="status-indicator-tag green">Sample Valid</span>
       <span class="status-sub">Normal physiological electrolyte profile</span>
     `;
-    kResultDisplay.style.borderColor = 'var(--border-subtle)';
+    kResultCard.style.borderColor = 'var(--border-subtle)';
   }
   syncAmsv();
 }
@@ -157,8 +157,8 @@ function evaluateEnvelope(dt = 0.1) {
   document.getElementById('kalmanDmapDisplay').textContent = `d(MAP)/dt: ${state.dMapDt > 0 ? '+' : ''}${state.dMapDt.toFixed(1)} mmHg/s`;
   document.getElementById('shockIndexDisplay').textContent = `Shock Index: ${shockIndex}`;
 
-  const envelopeCard = document.getElementById('envelopeCard');
-  const alphaBadge = document.getElementById('alphaFloorBadge');
+  const envelopeCard = document.getElementById('alphaFloorCard');
+  const alphaBadge = document.getElementById('alphaFloorStateBadge');
   const allowedRateDisplay = document.getElementById('allowedRateDisplay');
 
   // Alpha Floor Logic:
@@ -357,25 +357,25 @@ function recalculateBiometrics() {
   const egfr = 142.0 * Math.pow(minPart, alpha) * Math.pow(maxPart, -1.200) * Math.pow(0.9938, age) * sexMult;
   state.egfr = Math.round(egfr * 10) / 10;
 
-  document.getElementById('egfrPill').textContent = `eGFR: ${state.egfr} mL/min`;
+  document.getElementById('egfrPillDisplay').textContent = `eGFR: ${state.egfr} mL/min`;
 
-  const ntiCard = document.getElementById('ntiCheckResult');
-  const resText = document.getElementById('metforminResultText');
-  const detText = document.getElementById('metforminDetailText');
+  const ntiCard = document.getElementById('renalAlertBox');
+  const resText = document.getElementById('renalResultText');
+  const detText = document.getElementById('renalDetailText');
 
   if (state.egfr < 30.0) {
-    ntiCard.className = 'nti-check-result locked';
+    ntiCard.className = 'renal-alert-box locked';
     resText.className = 'text-danger';
     resText.textContent = 'CONTRAINDICATED (eGFR < 30)';
     detText.textContent = 'ABSOLUTE LOCKOUT: Severe risk of fatal lactic acidosis.';
     triggerHardwareLockout('PHARMA TRIP: Metformin contraindicated at eGFR < 30 mL/min/1.73m\u00b2');
   } else if (state.egfr < 45.0) {
-    ntiCard.className = 'nti-check-result';
+    ntiCard.className = 'renal-alert-box';
     resText.className = 'text-warning';
     resText.textContent = 'DOSE CLAMPED (eGFR 30-44)';
     detText.textContent = 'Dettli ceiling enforces 50% dose reduction (1000 mg/day max).';
   } else {
-    ntiCard.className = 'nti-check-result';
+    ntiCard.className = 'renal-alert-box';
     resText.className = 'text-success';
     resText.textContent = 'SAFE (\u2265 45 mL/min/1.73m\u00b2)';
     detText.textContent = 'Standard dosing permitted (2000 mg/day max).';
@@ -713,6 +713,7 @@ function switchView(viewName) {
     'BEDSIDE_DECK': 'tabBedsideDeck',
     'PHARMACY': 'tabPharmacy',
     'WORKFORCE': 'tabWorkforce',
+    'EARLY_WARNING': 'tabEarlyWarning',
     'TERMINAL': 'tabTerminal'
   };
 
@@ -722,6 +723,7 @@ function switchView(viewName) {
     'BEDSIDE_DECK': 'viewBedsideDeck',
     'PHARMACY': 'viewPharmacy',
     'WORKFORCE': 'viewWorkforce',
+    'EARLY_WARNING': 'viewEarlyWarning',
     'TERMINAL': 'viewTerminal'
   };
 
@@ -753,6 +755,8 @@ function switchView(viewName) {
     fetchPharmacySurveillance();
   } else if (viewName === 'WORKFORCE') {
     fetchWorkforceRoster();
+  } else if (viewName === 'EARLY_WARNING') {
+    fetchEarlyWarning();
   }
 }
 
@@ -1063,5 +1067,176 @@ setInterval(() => {
   fetchHospitalWards();
 }, 4000);
 
+// =============================================================================
+// Clinical Early Warning (NEWS2) — deterioration trajectories
+// =============================================================================
+let ewsAlertSeen = 0;
 
+async function fetchEarlyWarning() {
+  try {
+    const res = await fetch('/api/clinical/news2');
+    if (!res.ok) return;
+    const data = await res.json();
 
+    document.getElementById('ewsMonitoredCount').textContent = `${data.patients.length} Patients`;
+    document.getElementById('ewsLowChip').textContent = `LOW: ${data.band_counts.LOW || 0}`;
+    document.getElementById('ewsMediumChip').textContent = `MEDIUM: ${data.band_counts.MEDIUM || 0}`;
+    document.getElementById('ewsHighChip').textContent = `HIGH: ${data.band_counts.HIGH || 0}`;
+
+    const totalObs = data.patients.reduce((sum, p) => sum + (p.trend_observations || 0), 0);
+    document.getElementById('ewsTrendObsCount').textContent = `${totalObs} Trend Obs`;
+
+    const tbody = document.getElementById('ewsPatientsBody');
+    tbody.innerHTML = '';
+    if (data.patients.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6">Census empty.</td></tr>';
+      return;
+    }
+    data.patients.forEach(p => {
+      const bandClass = p.clinical_risk === 'HIGH' ? 'text-danger'
+        : p.clinical_risk === 'MEDIUM' ? 'text-warning' : 'text-success';
+      const escalated = p.escalation !== p.clinical_risk ? ` &rarr; ${p.escalation}` : '';
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><strong class="text-info">${p.bed_id || '—'}</strong></td>
+        <td>${p.name}</td>
+        <td>${p.ward_id}</td>
+        <td><strong>${p.total_score}</strong></td>
+        <td class="${bandClass}">${p.clinical_risk}${escalated}</td>
+        <td>${p.trend_observations || 0}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    // Keep the observation form's patient selector in sync
+    const select = document.getElementById('ewsPatientSelect');
+    const current = select.value;
+    select.innerHTML = '';
+    data.patients.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.patient_id;
+      opt.textContent = `${p.bed_id || 'NO BED'} — ${p.name} (NEWS2 ${p.total_score})`;
+      select.appendChild(opt);
+    });
+    if (current) select.value = current;
+  } catch (err) {
+    console.error("Early warning fetch error:", err);
+  }
+}
+
+async function submitNews2Observation() {
+  const patientId = document.getElementById('ewsPatientSelect').value;
+  const resultBox = document.getElementById('ewsResultBox');
+  if (!patientId) {
+    resultBox.textContent = 'Select a patient first.';
+    return;
+  }
+  const payload = {};
+  const numericFields = {
+    respiration_rate: 'ewsRR',
+    spo2_percent: 'ewsSpO2',
+    systolic_bp_mmhg: 'ewsSBP',
+    pulse_bpm: 'ewsPulse',
+    temperature_c: 'ewsTemp',
+  };
+  Object.entries(numericFields).forEach(([key, elId]) => {
+    const raw = document.getElementById(elId).value;
+    if (raw !== '') payload[key] = parseFloat(raw);
+  });
+  payload.spo2_scale = parseInt(document.getElementById('ewsScale').value, 10);
+  payload.on_supplemental_oxygen = document.getElementById('ewsO2').checked;
+  // Checkbox label is "New CVPU (not Alert)": CHECKED means the patient is
+  // NOT alert, so is_alert must be the negation. (H-11 override semantics.)
+  payload.is_alert = !document.getElementById('ewsAlertState').checked;
+
+  try {
+    const res = await fetch(`/api/clinical/news2/${patientId}/observation`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      resultBox.textContent = `REJECTED: ${data.error || 'observation failed'}`;
+      return;
+    }
+    const alerts = data.trend_alerts || [];
+    const bandClass = data.clinical_risk === 'HIGH' ? 'text-danger'
+      : data.clinical_risk === 'MEDIUM' ? 'text-warning' : 'text-success';
+    const defaulted = Object.values(data.defaults_used || {}).filter(Boolean).length;
+    resultBox.innerHTML = `OBSERVED: NEWS2 <strong>${data.total_score}</strong> — ` +
+      `<span class="${bandClass}">${data.clinical_risk}</span>` +
+      ` | escalation: ${data.escalation}` +
+      ` | defaulted fields: ${defaulted || 'none'}` +
+      (alerts.length ? ` | &#9888; ${alerts.map(a => a.type).join(', ')}` : '');
+    appendEwsAlertFeed(alerts, patientId);
+    fetchEarlyWarning();
+  } catch (err) {
+    resultBox.textContent = `ERROR: ${err.message}`;
+  }
+}
+
+function appendEwsAlertFeed(alerts, patientId) {
+  if (!alerts.length) return;
+  const feed = document.getElementById('ewsAlertFeed');
+  const emptyNote = feed.querySelector('.text-success');
+  if (emptyNote) feed.innerHTML = '';
+  alerts.forEach(a => {
+    ewsAlertSeen += 1;
+    const card = document.createElement('div');
+    card.className = 'ddi-alert-card';
+    card.innerHTML = `<strong>[${a.type}] ${patientId} — NEWS2 ${a.latest_score}</strong><p>${a.message}</p>`;
+    feed.prepend(card);
+  });
+  document.getElementById('ewsAlertCount').textContent = `${ewsAlertSeen} Alerts (session)`;
+}
+
+// =============================================================================
+// Bedside Deck Interaction Functions (were missing - sliders/buttons were dead)
+// =============================================================================
+function updatePotassium(val) {
+  state.potassiumVal = parseFloat(val);
+  document.getElementById('kValDisplay').textContent = state.potassiumVal.toFixed(2) + ' mEq/L';
+  updateHemolysis(state.hemolysisIndex);
+}
+
+function updateHIndex(val) {
+  updateHemolysis(val);
+}
+
+function updateCreatinine(val) {
+  state.serumCr = parseFloat(val);
+  document.getElementById('crValDisplay').textContent = state.serumCr.toFixed(1) + ' mg/dL';
+  const crInput = document.getElementById('serumCrInput');
+  if (crInput) crInput.value = state.serumCr.toFixed(1);
+  recalculateBiometrics();
+}
+
+function updateHrTelemetry(val) {
+  state.patientHr = parseInt(val, 10);
+  document.getElementById('hrValDisplay').textContent = state.patientHr + ' BPM';
+  evaluateEnvelope(0.1);
+}
+
+function simulateHemodynamicStall() {
+  simulateHemodynamicCrash();
+}
+
+function recoverFromStall() {
+  restoreHemodynamicStability();
+}
+
+function triggerOcclusionTrip() {
+  simulateOcclusionTrip();
+}
+
+function triggerBubbleTrip() {
+  simulateAirBubbleTrip();
+}
+
+function resetActuator() {
+  document.getElementById('pressureSlider').value = 180;
+  document.getElementById('bubbleSlider').value = 0;
+  updatePressure(180);
+  updateBubble(0);
+}

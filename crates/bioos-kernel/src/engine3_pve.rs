@@ -77,12 +77,10 @@ impl PharmacologicalVerificationEngine {
             label_max_dose
         };
 
-        let ceiling = label_max_dose
+        label_max_dose
             .min(ders_hard_limit)
             .min(adjusted_by_organs)
-            .min(adjusted_by_immuno);
-
-        ceiling
+            .min(adjusted_by_immuno)
     }
 
     /// Verifies drug order against Narrow Therapeutic Index (NTI) Register
@@ -111,7 +109,11 @@ impl PharmacologicalVerificationEngine {
                         drug,
                         requested_dose,
                         sanctioned_ceiling_dose: sanctioned,
-                        outcome: if requested_dose > ceiling { VerificationOutcome::DoseClamped } else { VerificationOutcome::Approved },
+                        outcome: if requested_dose > ceiling {
+                            VerificationOutcome::DoseClamped
+                        } else {
+                            VerificationOutcome::Approved
+                        },
                         lockout_reason: None,
                     }
                 } else {
@@ -121,7 +123,11 @@ impl PharmacologicalVerificationEngine {
                         drug,
                         requested_dose,
                         sanctioned_ceiling_dose: sanctioned,
-                        outcome: if requested_dose > ceiling { VerificationOutcome::DoseClamped } else { VerificationOutcome::Approved },
+                        outcome: if requested_dose > ceiling {
+                            VerificationOutcome::DoseClamped
+                        } else {
+                            VerificationOutcome::Approved
+                        },
                         lockout_reason: None,
                     }
                 }
@@ -141,7 +147,11 @@ impl PharmacologicalVerificationEngine {
                     drug,
                     requested_dose,
                     sanctioned_ceiling_dose: sanctioned,
-                    outcome: if requested_dose > ceiling { VerificationOutcome::DoseClamped } else { VerificationOutcome::Approved },
+                    outcome: if requested_dose > ceiling {
+                        VerificationOutcome::DoseClamped
+                    } else {
+                        VerificationOutcome::Approved
+                    },
                     lockout_reason: None,
                 }
             }
@@ -162,7 +172,11 @@ impl PharmacologicalVerificationEngine {
                         drug,
                         requested_dose,
                         sanctioned_ceiling_dose: sanctioned,
-                        outcome: if requested_dose > ceiling { VerificationOutcome::DoseClamped } else { VerificationOutcome::Approved },
+                        outcome: if requested_dose > ceiling {
+                            VerificationOutcome::DoseClamped
+                        } else {
+                            VerificationOutcome::Approved
+                        },
                         lockout_reason: None,
                     }
                 }
@@ -176,7 +190,11 @@ impl PharmacologicalVerificationEngine {
                     drug,
                     requested_dose,
                     sanctioned_ceiling_dose: sanctioned,
-                    outcome: if requested_dose > ceiling { VerificationOutcome::DoseClamped } else { VerificationOutcome::Approved },
+                    outcome: if requested_dose > ceiling {
+                        VerificationOutcome::DoseClamped
+                    } else {
+                        VerificationOutcome::Approved
+                    },
                     lockout_reason: None,
                 }
             }
@@ -195,14 +213,30 @@ impl PharmacologicalVerificationEngine {
     /// Score >= 11 designates High Risk and activates cardiac interlock
     pub fn calculate_tisdale_score(input: &TisdaleScoreInput) -> (u8, &'static str) {
         let mut score: u8 = 0;
-        if input.age_gte_68 { score += 1; }
-        if input.female_sex { score += 1; }
-        if input.loop_diuretic { score += 1; }
-        if input.serum_k_lte_3_5 { score += 2; }
-        if input.baseline_qtc_gte_450 { score += 2; }
-        if input.acute_myocardial_infarction { score += 2; }
-        if input.sepsis { score += 3; }
-        if input.heart_failure { score += 3; }
+        if input.age_gte_68 {
+            score += 1;
+        }
+        if input.female_sex {
+            score += 1;
+        }
+        if input.loop_diuretic {
+            score += 1;
+        }
+        if input.serum_k_lte_3_5 {
+            score += 2;
+        }
+        if input.baseline_qtc_gte_450 {
+            score += 2;
+        }
+        if input.acute_myocardial_infarction {
+            score += 2;
+        }
+        if input.sepsis {
+            score += 3;
+        }
+        if input.heart_failure {
+            score += 3;
+        }
 
         if input.qtc_prolonging_drugs_count == 1 {
             score += 3;

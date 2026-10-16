@@ -83,17 +83,40 @@ assert ctypes.sizeof(TriPlaneAmsv) == 128, f"TriPlane size error: {ctypes.sizeof
 class BioOsKernelBridge:
     """Manages the zero-bridge shared memory interaction with bioos_kernel.dll"""
 
+    # Platform-appropriate cdylib artifact name for the Plane A kernel
+    _CDYLIB_BY_PLATFORM = {
+        "win32": "bioos_kernel.dll",
+        "darwin": "libbioos_kernel.dylib",
+    }
+
+    @classmethod
+    def _locate_cdylib(cls) -> str:
+        """Resolves the kernel cdylib: BIOOS_KERNEL_LIB env override, else
+        release/ then debug/ target dirs for the current platform."""
+        override = os.environ.get("BIOOS_KERNEL_LIB")
+        if override:
+            return override
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        artifact = cls._CDYLIB_BY_PLATFORM.get(sys.platform, "libbioos_kernel.so")
+        candidates = [
+            os.path.join(base_dir, "crates", "bioos-kernel", "target", "release", artifact),
+            os.path.join(base_dir, "crates", "bioos-kernel", "target", "debug", artifact),
+        ]
+        for path in candidates:
+            if os.path.exists(path):
+                return path
+        raise FileNotFoundError(
+            f"BioOS kernel cdylib not found (tried: {', '.join(candidates)}). "
+            "Build it with: cargo build --release --manifest-path crates/bioos-kernel/Cargo.toml "
+            "or set BIOOS_KERNEL_LIB."
+        )
+
     def __init__(self, dll_path: Optional[str] = None):
         if dll_path is None:
-            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            dll_path = os.path.join(base_dir, "crates", "bioos-kernel", "target", "release", "bioos_kernel.dll")
+            dll_path = self._locate_cdylib()
 
         if not os.path.exists(dll_path):
-            debug_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "crates", "bioos-kernel", "target", "debug", "bioos_kernel.dll")
-            if os.path.exists(debug_path):
-                dll_path = debug_path
-            else:
-                raise FileNotFoundError(f"bioos_kernel.dll not found at {dll_path} or {debug_path}")
+            raise FileNotFoundError(f"BioOS kernel cdylib not found at {dll_path}")
 
         self.lib = ctypes.CDLL(dll_path)
         self._setup_ffi_signatures()
@@ -111,10 +134,11 @@ class BioOsKernelBridge:
         self.lib.bioos_amsv_get_raw_ptr.restype = ctypes.c_void_p
         self.lib.bioos_amsv_get_raw_ptr.argtypes = []
 
-        # bioos_kernel_step(t_ns, hb_ns, press, bubble, h_idx, k_val) -> u8
+        # bioos_kernel_step(t_ns u64, hb_ns u64, press, bubble, h_idx, k_val) -> u8
+        # u64 time base: full monotonic nanoseconds (u32 wrapped every ~4.29 s)
         self.lib.bioos_kernel_step.restype = ctypes.c_uint8
         self.lib.bioos_kernel_step.argtypes = [
-            ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint16, ctypes.c_float
+            ctypes.c_uint64, ctypes.c_uint64, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint16, ctypes.c_float
         ]
 
         # bioos_amsv_read_atomic(dest_ptr)

@@ -247,7 +247,35 @@ def test_hospital_topology():
     assert len(pharm["active_ddi_alerts"]) >= 1
     print(f" -> Pharmacy NTI & DDI Surveillance: PASS ({pharm['total_active_infusions']} infusions active)")
 
+
+
+def test_new_engine_shell_commands():
+    print("[TEST] BioOS shell: news2 / drift / audit / auth commands...")
+    from bioos_runtime import execute_os_command
+
+    news2 = execute_os_command({"command": "news2"})
+    assert "NEWS2" in news2["output"] and "Census:" in news2["output"]
+
+    drift = execute_os_command({"command": "drift"})
+    assert "COGNITIVE DRIFT MONITOR" in drift["output"]
+    assert "Control limits" in drift["output"]
+
+    audit = execute_os_command({"command": "audit"})
+    assert "HASH-CHAINED AUDIT LOG" in audit["output"]
+    assert "INTACT" in audit["output"] or "TAMPERED" in audit["output"]
+
+    auth = execute_os_command({"command": "auth"})
+    assert "AUTHENTICATION" in auth["output"]
+    assert "PHARMACIST" in auth["output"]  # role list present
+
+    help_out = execute_os_command({"command": "help"})
+    for cmd_name in ("news2", "drift", "audit", "auth"):
+        assert cmd_name in help_out["output"]
+    print(" -> Shell engine commands PASS (news2/drift/audit/auth + help)")
+
+
 if __name__ == "__main__":
+    test_new_engine_shell_commands()
     test_engine5_coe()
     test_engine6_oce()
     test_wellbeing_engine()

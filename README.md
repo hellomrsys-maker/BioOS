@@ -50,29 +50,40 @@ BioOS applies commercial avionics-grade redundancy (analogous to multi-engine fl
 
 ```
 bio-os/
+├── .github/workflows/ci.yml          # CI: fmt + clippy(-D warnings) + tests + Linux cdylib build
 ├── docs/
 │   ├── MASTER_ARCHITECTURE_BLUEPRINT.md    # Comprehensive system specification
-│   └── DATA_DICTIONARY_AND_FORMULAS.md     # Formulas, clinical constants, NTI tables
+│   ├── DATA_DICTIONARY_AND_FORMULAS.md     # Formulas, clinical constants, NTI tables
+│   └── ROADMAP_AND_CRITICAL_PRIORITIES.md  # Gap analysis & prioritized development plan
 ├── crates/
 │   └── bioos-kernel/                       # Rust #![no_std] IEC 62304 Class C Safety Kernel
-│       ├── Cargo.toml
-│       └── src/
-│           ├── lib.rs                      # Public kernel API & test suite
-│           ├── amsv.rs                     # 64-Byte Cache-Line Aligned AMSV & Seqlock
-│           ├── engine1_ese.rs              # CLSI C56-A K+ Gate, Occlusion, Air-in-line
-│           ├── engine2_bpe.rs              # CKD-EPI 2021, Devine ABW CrCl, AKI Kinetic
-│           ├── engine3_pve.rs              # Dettli Ceiling Law, Metformin Lockout, Tisdale
-│           └── engine4_wie.rs              # Mealy Watchdog Automaton, 2ms SSR / 12ms Relay
+│       ├── Cargo.toml / Cargo.lock         # Pinned, reproducible dependency resolution
+│       └── src/ (see Section 2 modules)
 ├── services/
-│   ├── test_services.py                    # Complete test suite for Plane B & OCE
+│   ├── bioos_runtime.py                    # FastAPI + SSE Master OS Runtime Daemon
+│   ├── bioos_ctl.py                        # Administrative CLI shell
+│   ├── kernel_bridge.py                    # ctypes zero-bridge to kernel cdylib (dll/so/dylib)
+│   ├── rbac_auth.py                        # Stdlib HS256 JWT + RBAC (OIDC-ready skeleton)
+│   ├── wcet_benchmark.py                   # Kernel C-ABI WCET harness (host FFI budgets)
+│   ├── test_services.py / test_kernel_bridge.py / test_enterprise_fabric.py
+│   ├── test_hl7_mllp.py / test_eval_harness.py / test_ews_engine.py / test_ews_trend.py / test_oidc_auth.py
 │   ├── cognitive_plane/
-│   │   └── engine5_coe.py                  # AMD Instinct MI300X vLLM + RFC 9162 Merkle Log
+│   │   ├── engine5_coe.py                  # AMD Instinct MI300X vLLM + RFC 9162 Merkle Log
+│   │   ├── eval_harness.py                 # 9 golden clinical cases + scoring runner (CI-runnable)
+│   │   └── drift_monitor.py                # Approval-rate control limits (guard-bypass alerts)
 │   └── command_center/
-│       └── engine6_oce.py                  # Hospital Command, Escalation Index, MHP, RTLS
-└── web/
-    ├── index.html                          # Interactive Medical Flight Deck UI
-    ├── style.css                           # High-contrast aerospace dark theme
-    └── app.js                              # Real-time state machine & 64-byte AMSV visualizer
+│       ├── engine6_oce.py                  # Hospital Command, Escalation Index, MHP, RTLS
+│       ├── wellbeing_engine.py             # Clinician & Patient Wellbeing Engine
+│       ├── hospital_topology.py            # 78-bed multi-ward topology & RTLS turnover
+│       ├── audit_store.py                  # SQLite WAL telemetry + hash-chained audit log
+│       ├── fhir_facade.py                  # FHIR R4 Patient/Observation/MedicationRequest (kernel-gated)
+│       ├── hl7_mllp.py                     # HL7 v2 MLLP stub listener (env BIOOS_MLLP_PORT)
+│       ├── ews_engine.py                   # NEWS2 early-warning score (RCP Dec 2017, golden-vector tested)
+│       └── ews_trend.py                    # NEWS2 trajectory rules (rise>=2 / sustained>=3 / >=7 emergency)
+├── docs/compliance/                        # ISO 14971 hazard register, IEC 62304 traceability (aligned-to)
+├── web/                                    # Medical Flight Deck UI (index/app.js/style.css)
+├── requirements.txt                        # Pinned Python dependencies (supply-chain policy)
+└── Dockerfile / .dockerignore              # Multi-stage: Rust kernel build + Python runtime
 ```
 
 ---
@@ -81,11 +92,18 @@ bio-os/
 
 ### 3.1 Plane A Rust Kernel Tests (100% Pass)
 ```powershell
-cd C:\Users\sysyo\.gemini\antigravity-ide\scratch\bio-os\crates\bioos-kernel
+cd D:\BIO.OS\crates\bioos-kernel
 cargo test
 ```
-**Test Results:**
+**Test Results (14/14):**
 - `test_amsv_struct_layout_and_size`: Verified 64-byte size, 64-byte alignment, Seqlock read/write, CRC-16.
+- `test_triplane_dual_cacheline_layout`: Verified 128-byte dual-cache-line TriPlane layout.
+- `test_hal_medical_bus_and_fault_injection`: Verified medical bus HAL online/fault injection states.
+- `test_medical_device_drivers_ders_and_alarms`: Verified DERS limits and IEC 60601-1-8 alarm classes on device drivers.
+- `test_kalman_envelope_and_alpha_floor`: Verified 100 Hz EKF envelope tracking and alpha-floor hemodynamic stall protection.
+- `test_realtime_scheduler_edf_dispatch`: Verified deterministic rate-monotonic/EDF task dispatch.
+- `test_spsc_ring_buffer_wait_free_ipc`: Verified wait-free single-producer/single-consumer IPC.
+- `test_static_slab_pool_o1_alloc_free`: Verified O(1) static slab allocation/free with 0-heap guarantee.
 - `test_clsi_c56a_potassium_hemolysis_gate`: Verified $H > 20 \implies$ VOID (NaN) pseudohyperkalemia interlock.
 - `test_pump_occlusion_and_air_bubble_trips`: Verified $525\text{ mmHg}$ ($10.2\text{ psi}$) and $\ge 25\ \mu\text{L}$ bubble trips.
 - `test_ckd_epi_and_cockcroft_gault`: Verified race-free eGFR and 3-tier Devine weight selection.
@@ -95,11 +113,33 @@ cargo test
 
 ### 3.2 Plane B & Enterprise Python Tests (100% Pass)
 ```powershell
-& "C:\Users\sysyo\AppData\Local\Python\bin\python.exe" "C:\Users\sysyo\.gemini\antigravity-ide\scratch\bio-os\services\test_services.py"
+cd D:\BIO.OS
+python -m pytest services -v
 ```
+
+### 3.3 Cognitive Plane Golden-Case Evaluation
+```powershell
+cd D:\BIO.OS
+python services\cognitive_plane\eval_harness.py
+```
+9 golden cases: verbatim NTI dosing (Vancomycin/Digoxin/Enoxaparin/Metformin), hallucinated-token rejection, and a live Plane A kernel metformin lockout (eGFR 22 → HardLockoutContraindicated). Exits 1 on any failure; guard-bypass detection proven.
+
+### 3.4 Embedded no_std Build (Cortex-M4F)
+```powershell
+rustup target add thumbv7em-none-eabihf
+cargo build --lib --no-default-features --features no_std --target thumbv7em-none-eabihf --manifest-path crates\bioos-kernel\Cargo.toml
+```
+Proves the safety kernel is genuinely `#![no_std]` (gated in CI; 64-bit atomics portable via `portable_atomic.rs`).
+
+### 3.3 Kernel WCET Benchmark (first measured numbers)
+```powershell
+cd D:\BIO.OS
+python services\wcet_benchmark.py --iters 50000
+```
+Measured host FFI round-trip (Windows, 50k samples): `bioos_kernel_step` p50 ≈ 2.7 µs, p99 ≈ 8.1 µs against the 100 µs budget of the 1000 Hz loop. Max spikes are Windows scheduler preemption artifacts; on-target RTOS budgets are a separate roadmap item.
 **Test Results:**
 - Engine 5 (COE): AMD ROCm inference adapter, XGrammar JSON constrained generation, RFC 9162 Merkle tree root hashing.
 - Engine 6 (OCE): Hospital Escalation Index ($E_I$), RTLS 5-stage bed turnover, Massive Hemorrhage Protocol (MHP "7 Ts"), Nurse Standing Orders (Sepsis 1-hr, ACS, Hypoglycemia), ASHRAE 170 HVAC cascades, and HICS 2014 reverse triage.
 
 ### 3.3 Interactive Medical Flight Deck
-- Open `http://localhost:8089/` in any modern web browser to interact with live telemetry, trigger occlusion and air-in-line spikes, test the CLSI C56-A potassium gate, simulate mass casualty surge, and inspect the 64-byte AMSV cache-line memory grid.
+- Open `http://localhost:8090/` in any modern web browser to interact with live telemetry, trigger occlusion and air-in-line spikes, test the CLSI C56-A potassium gate, simulate mass casualty surge, and inspect the 64-byte AMSV cache-line memory grid.

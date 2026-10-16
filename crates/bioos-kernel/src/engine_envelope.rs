@@ -14,10 +14,10 @@ pub enum AlphaFloorState {
 
 #[derive(Debug, Clone, Copy)]
 pub struct KalmanStateEstimate {
-    pub estimated_map_mmhg: f32,       // Estimated true Mean Arterial Pressure
-    pub estimated_hr_bpm: f32,         // Estimated true Heart Rate
-    pub shock_index: f32,              // HR / SBP
-    pub d_map_dt: f32,                 // Rate of MAP change (mmHg/s)
+    pub estimated_map_mmhg: f32, // Estimated true Mean Arterial Pressure
+    pub estimated_hr_bpm: f32,   // Estimated true Heart Rate
+    pub shock_index: f32,        // HR / SBP
+    pub d_map_dt: f32,           // Rate of MAP change (mmHg/s)
     pub alpha_floor_state: AlphaFloorState,
     pub permissible_rate_ceiling: f32, // Maximum dynamically allowable infusion rate (mL/h)
 }
@@ -145,7 +145,11 @@ impl PhysiologicalEnvelopeEngine {
         let (est_map, d_map_dt) = self.map_filter.update(raw_map_mmhg, dt_seconds);
         let (est_hr, _) = self.hr_filter.update(raw_hr_bpm, dt_seconds);
 
-        let sbp = if raw_sbp_mmhg > 10.0 { raw_sbp_mmhg } else { est_map * 1.35 };
+        let sbp = if raw_sbp_mmhg > 10.0 {
+            raw_sbp_mmhg
+        } else {
+            est_map * 1.35
+        };
         let shock_index = est_hr / sbp;
 
         // Alpha-Floor Stall Check:
@@ -154,7 +158,10 @@ impl PhysiologicalEnvelopeEngine {
         let (alpha_floor_state, mut allowed_rate) = if est_map < 55.0 || d_map_dt < -2.0 {
             (AlphaFloorState::HemodynamicStallEmergency, 0.0) // Clamp to zero or emergency trigger
         } else if est_map < 65.0 || shock_index >= 1.0 {
-            (AlphaFloorState::SoftEnvelopeClamped, requested_rate_ml_h * 0.50) // Clamp by 50%
+            (
+                AlphaFloorState::SoftEnvelopeClamped,
+                requested_rate_ml_h * 0.50,
+            ) // Clamp by 50%
         } else {
             (AlphaFloorState::Nominal, requested_rate_ml_h)
         };

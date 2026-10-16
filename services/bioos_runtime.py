@@ -31,6 +31,11 @@ from engine5_coe import ClinicalOversightEngine
 from engine6_oce import OperationalCommandEngine, HospitalTelemetry, BedStatus
 from wellbeing_engine import HospitalWellbeingEngine
 from hospital_topology import HospitalTopologyManager, PatientRecord
+from audit_store import BioOsPersistenceStore
+from fhir_facade import FhirService
+from drift_monitor import ApprovalRateDriftMonitor
+from ews_trend import News2TrendMonitor
+import rbac_auth
 
 app = FastAPI(
     title="BioOS Master Operating System & Wellbeing Runtime API",
@@ -40,7 +45,12 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    # Same-origin flight deck only. Wildcard origins with credentials are an
+    # invalid/unsafe combination (browsers reject; security scanners flag).
+    allow_origins=[
+        "http://localhost:8090",
+        "http://127.0.0.1:8090",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -62,6 +72,112 @@ wellbeing = HospitalWellbeingEngine()
 print("[BioOS] Booting Enterprise Hospital Multi-Ward Topology & Census Manager...")
 topology = HospitalTopologyManager()
 
+print("[BioOS] Booting Persistence & Hash-Chained Audit Store (SQLite WAL)...")
+store = BioOsPersistenceStore(
+    os.environ.get(
+        "BIOOS_DB_PATH",
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "bioos_runtime.db"),
+    )
+)
+
+print("[BioOS] Booting FHIR R4 Facade (Plane B advisory layer, kernel-gated orders)...")
+fhir = FhirService(topology, store, kernel_bridge=kernel)
+
+print("[BioOS] Booting Cognitive Drift Monitor (approval-rate control limits)...")
+drift_monitor = ApprovalRateDriftMonitor()
+
+print("[BioOS] Booting NEWS2 Trend Monitor (RCP deterioration trajectory rules)...")
+news2_trend = News2TrendMonitor()
+
+
+def _start_mllp_listener() -> None:
+    """Optional HL7 v2 MLLP stub listener; disabled unless BIOOS_MLLP_PORT is set."""
+    port = os.environ.get("BIOOS_MLLP_PORT")
+    if not port:
+        return
+    import threading
+
+    from hl7_mllp import MllpAuditServer
+
+    def on_message(parsed: Dict[str, Any], raw: str) -> None:
+        # Stub policy: HL7 receipts are AUDITED, never acted on clinically.
+        store.append_audit_entry(
+            actor="HL7_MLLP",
+            action="HL7_MESSAGE_RECEIVED",
+            resource_type=parsed.get("message_type") or "HL7",
+            resource_id=parsed.get("control_id") or "unknown",
+            payload={
+                "patient_id": parsed.get("patient_id"),
+                "trigger_event": parsed.get("trigger_event"),
+                "sending_app": parsed.get("sending_app"),
+            },
+        )
+
+    server = MllpAuditServer(port=int(port), host="127.0.0.1", on_message=on_message)
+    threading.Thread(target=server.run_blocking, daemon=True, name="bioos-mllp").start()
+    print(f"[BioOS] HL7 v2 MLLP listener (stub) on 127.0.0.1:{port} -> audit store")
+
+
+_start_mllp_listener()
+
+
+def _start_telemetry_sampler() -> None:
+    """Continuous Plane A -> store AMSV telemetry capture.
+
+    Rate via BIOOS_TELEMETRY_HZ (default 2 Hz; 0 disables). Fixed-period
+    daemon-thread loop; storage errors are swallowed (sampling must never
+    take down the runtime)."""
+    hz = float(os.environ.get("BIOOS_TELEMETRY_HZ", "2"))
+    if hz <= 0:
+        return
+    import threading
+
+    def loop() -> None:
+        period = 1.0 / hz
+        while True:
+            started = time.perf_counter()
+            try:
+                amsv = kernel.read_atomic()
+                store.append_telemetry(
+                    ts_ns=time.time_ns(),
+                    device_class=amsv.device_class,
+                    metric_code=amsv.metric_code,
+                    value_x1000=amsv.value_x1000,
+                    quality_flags=amsv.quality_flags,
+                    limit_state=amsv.limit_state,
+                    alarm_class=amsv.alarm_class,
+                )
+            except Exception:
+                pass
+            elapsed = time.perf_counter() - started
+            time.sleep(max(0.0, period - elapsed))
+
+    threading.Thread(target=loop, daemon=True, name="bioos-telemetry").start()
+    print(f"[BioOS] Background telemetry sampler at {hz} Hz -> audit store")
+
+
+_start_telemetry_sampler()
+
+
+def _hydrate_news2_trend() -> None:
+    """Seeds the NEWS2 trend monitor from persisted observations so published
+    trajectory rules (rise >= 2, sustained >= 3) survive runtime restarts."""
+    try:
+        observations = store.query_clinical_observations(limit=500)
+    except Exception:
+        return
+    restored = 0
+    for obs in observations:
+        try:
+            news2_trend.record(obs["patient_id"], obs["total_score"])
+            restored += 1
+        except Exception:
+            pass
+    print(f"[BioOS] NEWS2 trend history hydrated ({restored} persisted observations)")
+
+
+_hydrate_news2_trend()
+
 # Active selected bed for bedside flight deck telemetry binding
 active_selected_bed_id = "ICU-A-01"
 
@@ -77,6 +193,12 @@ sim_state = {
     "sex_female": False,
     "heartbeat_ns": time.time_ns(),
 }
+
+
+@app.get("/api/health")
+def health() -> Dict[str, Any]:
+    """Liveness probe for orchestration & container HEALTHCHECK (no kernel dependency)."""
+    return {"status": "ok", "service": "bioos-runtime", "version": "2.0.0", "time_ns": time.time_ns()}
 
 
 @app.get("/api/amsv/raw")
@@ -146,7 +268,7 @@ def step_envelope_api(payload: Dict[str, Any]) -> Dict[str, Any]:
 @app.post("/api/kernel/step")
 def step_kernel(payload: Dict[str, Any]) -> Dict[str, Any]:
     """Steps the microkernel with updated telemetry parameters."""
-    t_now = time.time_ns() & 0xFFFFFFFF
+    t_now = time.time_ns()  # full u64 monotonic base (u32 truncation removed - wrap fix)
     sim_state["heartbeat_ns"] = t_now
 
     if "pressure_mmhg" in payload:
@@ -169,6 +291,20 @@ def step_kernel(payload: Dict[str, Any]) -> Dict[str, Any]:
     )
 
     amsv = kernel.read_atomic()
+    # Persist telemetry sample (append-only time series); capture must never
+    # break the control-plane step on storage errors.
+    try:
+        store.append_telemetry(
+            ts_ns=time.time_ns(),
+            device_class=amsv.device_class,
+            metric_code=amsv.metric_code,
+            value_x1000=amsv.value_x1000,
+            quality_flags=amsv.quality_flags,
+            limit_state=amsv.limit_state,
+            alarm_class=amsv.alarm_class,
+        )
+    except Exception:
+        pass
     state_names = ["NORMAL", "CAUTION", "HARDWARE_LOCKOUT"]
 
     return {
@@ -245,6 +381,10 @@ Available Commands:
   stall       Trigger or inspect Alpha-Floor stall protection state
   wellbeing   Display clinician cognitive load (CLI) and room acoustic stats
   hics        Query hospital surge escalation index (E_I) and bed readiness
+  news2       RCP NEWS2 census deterioration matrix and trajectory alerts
+  drift       Cognitive-plane approval-rate drift monitor status
+  audit       Verify hash-chained audit log integrity and counts
+  auth        Show authentication mode (OIDC RS256 / dev HS256) and roles
   clear       Clear the terminal display
 ======================================================================"""
     elif cmd == "ps":
@@ -324,6 +464,72 @@ Operational Regime    : {rep.regime.value} (Tier {rep.tier})
 Active Bed Allocation : 18 / 25 ICU Beds Occupied (72%)
 RTLS Bed Turnover     : 38 min average cycle time
 AIIR Isolation Rooms  : -2.6 Pa (Compliant with ASHRAE 170 / 241)"""
+    elif cmd == "news2":
+        from ews_engine import news2_from_patient
+
+        NL = chr(10)
+        rows = []
+        for rec in topology.patients.values():
+            s = news2_from_patient(rec)
+            rows.append((rec.bed_id or "--", rec.name, s["total_score"], s["clinical_risk"]))
+        rows.sort(key=lambda r: -r[2])
+        counts = {"LOW": 0, "MEDIUM": 0, "HIGH": 0}
+        for r in rows:
+            counts[r[3]] = counts.get(r[3], 0) + 1
+        lines = ["BED   PATIENT                     NEWS2  RISK", "-" * 54]
+        for bed, name, score, risk in rows:
+            lines.append("{:<5} {:<27} {:>5}   {}".format(bed, name, score, risk))
+        lines.append("-" * 54)
+        lines.append("Census: {} patients | LOW {} | MEDIUM {} | HIGH {}".format(
+            len(rows), counts["LOW"], counts["MEDIUM"], counts["HIGH"],
+        ))
+        lines.append("Trend observations in memory: " + str(sum(len(news2_trend.history(r[0])) for r in rows)))
+        lines.append("(RCP NEWS2 Dec 2017 - advisory only, Plane B)")
+        output = NL.join(lines)
+    elif cmd == "drift":
+        NL = chr(10)
+        rate = drift_monitor.approval_rate()
+        rate_text = str(rate) if rate is not None else "insufficient data"
+        output = NL.join([
+            "COGNITIVE DRIFT MONITOR (approval-rate control limits)",
+            "-" * 54,
+            "Rolling approval rate : " + rate_text,
+            "Control limits        : [{}, {}]".format(drift_monitor.lower_limit, drift_monitor.upper_limit),
+            "Window / min samples  : {} / {}".format(drift_monitor.window_size, drift_monitor.min_samples),
+            "Alerts emitted        : {}".format(drift_monitor.alerts_emitted),
+            "HIGH alert = possible guard bypass | LOW alert = schema drift",
+        ])
+    elif cmd == "audit":
+        NL = chr(10)
+        verdict = store.verify_audit_chain()
+        status = "INTACT" if verdict["valid"] else "TAMPERED at entry {} ({})".format(verdict["first_bad_id"], verdict["reason"])
+        output = NL.join([
+            "HASH-CHAINED AUDIT LOG (RFC 9162-complement)",
+            "-" * 54,
+            "Chain verdict         : " + status,
+            "Entries verified      : {}".format(verdict["entries"]),
+            "Telemetry samples     : {}".format(store.telemetry_count()),
+            "Tamper-evidence: each entry hashes the previous entry hash",
+        ])
+    elif cmd == "auth":
+        import rbac_auth as _rbac
+        from oidc_auth import issuer_configured as _oidc_issuer_configured
+
+        NL = chr(10)
+        if _oidc_issuer_configured():
+            mode = "OIDC RS256 via hospital IdP JWKS (BIOOS_OIDC_ISSUER set)"
+        else:
+            mode = "Development HS256 (set BIOOS_OIDC_ISSUER for production)"
+        enforced = "ENFORCED" if os.environ.get("BIOOS_AUTH_REQUIRED") == "1" else "dev-bypass (BIOOS_AUTH_REQUIRED=1 to enforce)"
+        roles = ", ".join(sorted(_rbac.ROLE_PERMISSIONS.keys()))
+        output = NL.join([
+            "AUTHENTICATION & ROLE-BASED ACCESS CONTROL",
+            "-" * 54,
+            "Mode                  : " + mode,
+            "Enforcement           : " + enforced,
+            "Roles                 : " + roles,
+            "Resolution            : OIDC RS256 -> dev HS256 -> X-Api-Key",
+        ])
     else:
         output = f"Unknown command: '{cmd}'. Type 'help' to view available BioOS commands."
         
@@ -434,6 +640,254 @@ def select_bed_for_flightdeck_api(payload: Dict[str, Any]) -> Dict[str, Any]:
 def get_pharmacy_surveillance_api() -> Dict[str, Any]:
     """Returns active hospital-wide high-risk infusions and automated DDI alerts."""
     return topology.get_pharmacy_surveillance()
+
+
+# ---------------- Enterprise Fabric: Auth/RBAC, FHIR, Audit -----------------
+
+@app.middleware("http")
+async def rbac_middleware(request: Request, call_next):
+    """Enforces route permissions when BIOOS_AUTH_REQUIRED=1 (default off for
+    local dev/demo). Health, auth-token and static UI stay public always."""
+    required = rbac_auth.route_permission(request.url.path, request.method)
+    if required is not None and os.environ.get("BIOOS_AUTH_REQUIRED", "0") == "1":
+        try:
+            role = rbac_auth.authenticate_request(
+                request.headers.get("authorization"),
+                request.headers.get("x-api-key"),
+                rbac_auth.default_dev_secret(),
+            )
+        except rbac_auth.AuthError as exc:
+            return JSONResponse({"error": "unauthenticated", "detail": str(exc)}, status_code=401)
+        if not rbac_auth.role_has_permission(role, required):
+            return JSONResponse(
+                {"error": "forbidden", "role": role, "required_permission": required},
+                status_code=403,
+            )
+        request.state.role = role
+    return await call_next(request)
+
+
+@app.post("/api/auth/token")
+def issue_auth_token(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Issues a dev HS256 token for the flight-deck UI. In production the
+    hospital OIDC provider issues tokens and this endpoint is retired."""
+    token = rbac_auth.issue_token(
+        role=str(payload.get("role", "SERVICE")),
+        subject=str(payload.get("subject", "anonymous")),
+        ttl_seconds=int(payload.get("ttl_seconds", 3600)),
+    )
+    return {"access_token": token, "token_type": "Bearer",
+            "expires_in": int(payload.get("ttl_seconds", 3600))}
+
+
+@app.get("/api/fhir/patients")
+def fhir_patients(ward_id: Optional[str] = None) -> Dict[str, Any]:
+    """FHIR R4 Patient bundle over the live census (optionally ward-filtered)."""
+    return fhir.patient_bundle(ward_id)
+
+
+@app.get("/api/fhir/patient/{patient_id}")
+def fhir_patient(patient_id: str) -> Dict[str, Any]:
+    resource = fhir.patient_by_id(patient_id)
+    if resource is None:
+        return JSONResponse({"error": f"patient {patient_id} not found"}, status_code=404)
+    return resource
+
+
+@app.get("/api/fhir/observations/{patient_id}")
+def fhir_observations(patient_id: str) -> Dict[str, Any]:
+    bundle = fhir.observations_for_patient(patient_id)
+    if bundle is None:
+        return JSONResponse({"error": f"patient {patient_id} not found"}, status_code=404)
+    return bundle
+
+
+@app.post("/api/fhir/medication-request")
+def fhir_medication_request(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Creates a kernel-gated MedicationRequest (always status=draft: advisory).
+    Metformin is verified by the Plane A PVE kernel via the ctypes bridge."""
+    result = fhir.create_medication_request(
+        patient_id=str(payload.get("patient_id", "")),
+        drug_name=str(payload.get("drug", "")),
+        dose_mg=float(payload.get("dose_mg", 0.0)),
+        practitioner=str(payload.get("practitioner", "BioOS CDS")),
+        egfr=payload.get("egfr"),
+    )
+    if "error" in result:
+        return JSONResponse(result, status_code=404)
+    # Feed the cognitive drift monitor (control-limit alerts on guard behavior)
+    drift_alert = drift_monitor.record(result.get("kernel_verification") == "Approved")
+    if drift_alert:
+        store.append_audit_entry(
+            actor="DRIFT_MONITOR", action="COGNITIVE_DRIFT_ALERT",
+            resource_type="DriftAlert", resource_id=drift_alert["type"],
+            payload=drift_alert,
+        )
+    result["drift_alert"] = drift_alert
+    return result
+
+
+@app.get("/api/cognitive/drift")
+def cognitive_drift_status() -> Dict[str, Any]:
+    """Rolling approval-rate drift telemetry for the cognitive plane."""
+    return {
+        "approval_rate": drift_monitor.approval_rate(),
+        "window_size": len(drift_monitor._window),
+        "limits": [drift_monitor.lower_limit, drift_monitor.upper_limit],
+        "alerts_emitted": drift_monitor.alerts_emitted,
+    }
+
+
+@app.get("/api/clinical/news2/{patient_id}")
+def clinical_news2(patient_id: str) -> Dict[str, Any]:
+    """RCP NEWS2 early-warning score for a census patient (advisory only).
+    HIGH-band escalations are written to the hash-chained audit log."""
+    from ews_engine import news2_from_patient
+    rec = topology.patients.get(patient_id)
+    if not rec:
+        return JSONResponse({"error": f"patient {patient_id} not found"}, status_code=404)
+    score = news2_from_patient(rec)
+    if score["escalation"] == "HIGH":
+        store.append_audit_entry(
+            actor="EWS_ENGINE",
+            action="NEWS2_HIGH_ESCALATION",
+            resource_type="Patient",
+            resource_id=patient_id,
+            payload={
+                "total_score": score["total_score"],
+                "per_parameter": score["per_parameter"],
+                "monitoring": score["monitoring_recommendation"],
+            },
+        )
+    return score
+
+
+@app.get("/api/clinical/news2")
+def clinical_news2_all() -> Dict[str, Any]:
+    """Census-wide NEWS2 advisory matrix (Scale 1 defaults; see the
+    observation endpoint for clinically-authoritative overrides)."""
+    from ews_engine import news2_from_patient
+
+    rows = []
+    for rec in topology.patients.values():
+        s = news2_from_patient(rec)
+        rows.append({
+            "patient_id": rec.patient_id,
+            "name": rec.name,
+            "bed_id": rec.bed_id,
+            "ward_id": rec.ward_id,
+            "total_score": s["total_score"],
+            "clinical_risk": s["clinical_risk"],
+            "escalation": s["escalation"],
+            "trend_observations": len(news2_trend.history(rec.patient_id)),
+        })
+    rows.sort(key=lambda r: (-r["total_score"], r["bed_id"]))
+    counts = {"LOW": 0, "MEDIUM": 0, "HIGH": 0}
+    for r in rows:
+        counts[r["clinical_risk"]] = counts.get(r["clinical_risk"], 0) + 1
+    return {"patients": rows, "band_counts": counts, "advisory_only": True}
+
+
+@app.post("/api/clinical/news2/{patient_id}/observation")
+def clinical_news2_observation(patient_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Records a clinical NEWS2 observation WITH overrides for the fields the
+    census record cannot know (supplemental O2, SpO2 scale, ACVPU alert state).
+
+    Addresses hazard H-11: `news2_from_patient` must default room-air/Alert for
+    convenience views, but REAL observations that silently keep those defaults
+    can under-score hypoxemic or obtunded patients. This endpoint requires the
+    clinician to pass overrides explicitly; when defaults are used they are
+    flagged in the response (`defaults_used`) for auditability."""
+    from ews_engine import compute_news2
+
+    rec = topology.patients.get(patient_id)
+    if not rec:
+        return JSONResponse({"error": f"patient {patient_id} not found"}, status_code=404)
+
+    on_oxygen = bool(payload.get("on_supplemental_oxygen", False))
+    spo2_scale = int(payload.get("spo2_scale", 1))
+    is_alert = bool(payload.get("is_alert", rec.gcs_score >= 15))
+    defaults_used = {
+        "on_supplemental_oxygen": "on_supplemental_oxygen" not in payload,
+        "spo2_scale": "spo2_scale" not in payload,
+        "is_alert": "is_alert" not in payload,
+    }
+
+    try:
+        score = compute_news2(
+            respiration_rate=float(payload.get("respiration_rate", rec.respiratory_rate)),
+            spo2_percent=float(payload.get("spo2_percent", rec.spo2_percent)),
+            on_supplemental_oxygen=on_oxygen,
+            systolic_bp_mmhg=float(payload.get("systolic_bp_mmhg", rec.systolic_bp)),
+            pulse_bpm=float(payload.get("pulse_bpm", rec.heart_rate)),
+            is_alert=is_alert,
+            temperature_c=float(payload.get("temperature_c", rec.temperature_c)),
+            spo2_scale=spo2_scale,
+        )
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=422)
+
+    trend_alerts = news2_trend.record(patient_id, score["total_score"])
+    score["trend_alerts"] = trend_alerts
+    score["defaults_used"] = defaults_used
+
+    # Persist the observation so deterioration trajectories survive restarts
+    try:
+        store.append_clinical_observation(
+            ts_ns=time.time_ns(),
+            patient_id=patient_id,
+            total_score=score["total_score"],
+            band=score["clinical_risk"],
+            on_supplemental_oxygen=on_oxygen,
+            spo2_scale=spo2_scale,
+            is_alert=is_alert,
+            defaults_used=defaults_used,
+        )
+    except Exception as exc:
+        print(f"[BioOS EWS] observation persistence failed: {exc}")
+
+    if trend_alerts:
+        for alert in trend_alerts:
+            store.append_audit_entry(
+                actor="EWS_TREND",
+                action=f"NEWS2_{alert['type']}",
+                resource_type="Patient",
+                resource_id=patient_id,
+                payload={"latest_score": score["total_score"],
+                          "message": alert["message"]},
+            )
+    return score
+
+
+@app.get("/api/fhir/subscriptions")
+def fhir_list_subscriptions() -> Dict[str, Any]:
+    return {"subscriptions": fhir.list_subscriptions()}
+
+
+@app.post("/api/fhir/subscriptions")
+def fhir_add_subscription(payload: Dict[str, Any]) -> Dict[str, Any]:
+    return fhir.add_subscription(
+        criteria=str(payload.get("criteria", "MedicationRequest")),
+        endpoint=str(payload.get("endpoint", "")),
+    )
+
+
+@app.get("/api/audit/chain")
+def audit_chain(limit: int = 20) -> Dict[str, Any]:
+    """Hash-chain verification verdict plus the most recent audit entries."""
+    return {
+        "verification": store.verify_audit_chain(),
+        "recent_entries": store.recent_audit(limit=limit),
+    }
+
+
+@app.get("/api/audit/telemetry")
+def audit_telemetry(limit: int = 100, metric_code: Optional[int] = None) -> Dict[str, Any]:
+    """Recent persisted AMSV telemetry samples."""
+    return {
+        "total_samples": store.telemetry_count(),
+        "samples": store.query_telemetry(metric_code=metric_code, limit=limit),
+    }
 
 
 # Mount static web frontend

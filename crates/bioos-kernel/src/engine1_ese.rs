@@ -31,7 +31,10 @@ pub struct EnvironmentalSensorEngine;
 impl EnvironmentalSensorEngine {
     /// Validates serum potassium against CLSI C56-A Hemolysis index.
     /// If H > 20 mg/dL, potassium is strictly VOID (NaN) to prevent fatal pseudohyperkalemic treatment.
-    pub fn validate_potassium(raw_k_mmol_l: f32, hemolysis_index: u16) -> PotassiumValidationResult {
+    pub fn validate_potassium(
+        raw_k_mmol_l: f32,
+        hemolysis_index: u16,
+    ) -> PotassiumValidationResult {
         if hemolysis_index > HEMOLYSIS_THRESHOLD_INDEX {
             PotassiumValidationResult {
                 value_mmol_l: f32::NAN,
@@ -67,7 +70,8 @@ impl EnvironmentalSensorEngine {
             return (SensorStatus::TripOcclusion, flags);
         }
 
-        if pressure_mmhg > 413 { // > 8.0 psi soft warning
+        if pressure_mmhg > 413 {
+            // > 8.0 psi soft warning
             flags |= quality_flags::NOISY_WARNING;
             return (SensorStatus::SoftWarning, flags);
         }

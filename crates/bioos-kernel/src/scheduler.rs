@@ -3,7 +3,9 @@
 //! Implements a deterministic Rate-Monotonic & Earliest Deadline First (EDF) scheduler.
 //! Zero dynamic heap allocation (#![no_std]).
 
-use core::sync::atomic::{AtomicU64, Ordering};
+use core::sync::atomic::Ordering;
+
+use crate::portable_atomic::PortableAtomicU64;
 
 pub const MAX_REALTIME_TASKS: usize = 8;
 
@@ -49,16 +51,23 @@ impl TaskControlBlock {
 
 pub struct RealTimeScheduler {
     pub tasks: [TaskControlBlock; MAX_REALTIME_TASKS],
-    pub current_time_ns: AtomicU64,
-    pub total_cycles_dispatched: AtomicU64,
+    // 64-bit time base portable to 32-bit targets without native 64-bit atomics
+    pub current_time_ns: PortableAtomicU64,
+    pub total_cycles_dispatched: PortableAtomicU64,
+}
+
+impl Default for RealTimeScheduler {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl RealTimeScheduler {
     pub const fn new() -> Self {
         Self {
             tasks: [TaskControlBlock::empty(); MAX_REALTIME_TASKS],
-            current_time_ns: AtomicU64::new(0),
-            total_cycles_dispatched: AtomicU64::new(0),
+            current_time_ns: PortableAtomicU64::new(0),
+            total_cycles_dispatched: PortableAtomicU64::new(0),
         }
     }
 

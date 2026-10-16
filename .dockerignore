@@ -1,0 +1,11 @@
+# Keep Docker build context small: never ship build artifacts or VCS history
+target/
+**/target/
+.git/
+.pytest_cache/
+__pycache__/
+**/__pycache__/
+docs/
+*.webp
+*.log
+clippy_out.txt

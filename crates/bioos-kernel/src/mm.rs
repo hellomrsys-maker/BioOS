@@ -12,6 +12,9 @@ pub struct SlabBlock64 {
 }
 
 impl SlabBlock64 {
+    /// Const constructor retained for static/const-context initialization.
+    /// `Default` is a manual impl (std implements array `Default` only up to
+    /// 32 elements, so `#[derive(Default)]` is unavailable for `[u8; 64]`).
     pub const fn new() -> Self {
         Self {
             data: [0u8; SLAB_BLOCK_SIZE_64],
@@ -20,6 +23,13 @@ impl SlabBlock64 {
     }
 }
 
+impl Default for SlabBlock64 {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[derive(Default)]
 pub struct StaticSlabPool {
     pub blocks: [SlabBlock64; SLAB_COUNT_64],
     pub allocated_count: usize,
