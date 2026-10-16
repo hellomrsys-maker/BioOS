@@ -532,6 +532,8 @@ function syncAmsv() {
   }
 }
 
+let lastTriPlaneSeq = 0;  // liveness: TriPlane seq must advance between polls
+
 function startKernelTicker() {
   setInterval(() => {
     state.seqCtr += 2;
@@ -555,6 +557,64 @@ function startKernelTicker() {
           if (l1.env_seq_ctr > 0 && document.getElementById('envSeqDisplay')) {
             document.getElementById('envSeqDisplay').textContent = l1.env_seq_ctr;
           }
+
+          // Live dual-engine cross-check table (Engine 1 actuation vs Engine 2 envelope)
+          const e1Rate = l0.rate_actual_ml_h;
+          const e2Rate = l1.permissible_rate_ml_h;
+          const e1RateCell = document.getElementById('e1RateCell');
+          const e2RateCell = document.getElementById('e2RateCell');
+          const rateSyncDot = document.getElementById('rateSyncDot');
+          if (e1RateCell) e1RateCell.textContent = e1Rate.toFixed(1) + ' mL/h';
+          if (e2RateCell) e2RateCell.textContent = e2Rate.toFixed(1) + ' mL/h Ceiling';
+          if (rateSyncDot) {
+            const synced = Math.abs(e1Rate - e2Rate) < 0.5;
+            rateSyncDot.className = 'status-dot ' + (synced ? 'green' : 'red');
+          }
+
+          // Interlock cross-check: Engine 1 watchdog vs Engine 2 alpha-floor
+          const e1Stall = l0.limit_state;       // 0 NORMAL, 1 CAUTION, 2 LOCKOUT
+          const e2Stall = l1.alpha_floor_state; // 0 NOMINAL, 1 CLAMPED, 2 STALL
+          const e1Names = ['Standby', 'Caution', 'Hardware Lockout'];
+          const e2Names = ['Nominal', 'Envelope Clamped', 'Stall Emergency'];
+          const e1StallCell = document.getElementById('e1StallCell');
+          const e2StallCell = document.getElementById('e2StallCell');
+          const stallSyncDot = document.getElementById('stallSyncDot');
+          if (e1StallCell) e1StallCell.textContent = e1Names[e1Stall] || 'Unknown';
+          if (e2StallCell) e2StallCell.textContent = e2Names[e2Stall] || 'Unknown';
+          if (stallSyncDot) {
+            const emergency = e1Stall === 2 || e2Stall === 2;
+            const caution = e1Stall === 1 || e2Stall === 1;
+            stallSyncDot.className = 'status-dot ' + (emergency ? 'red' : caution ? 'amber' : 'green');
+          }
+
+          // Stall warning box narrative (mirrors the alpha-floor badge)
+          const stallTitle = document.getElementById('stallTitle');
+          const stallDesc = document.getElementById('stallDesc');
+          if (stallTitle && stallDesc) {
+            if (e2Stall === 2) {
+              stallTitle.textContent = 'ALPHA-FLOOR: STALL EMERGENCY';
+              stallDesc.textContent = 'MAP below 55 mmHg or d(MAP)/dt below -2.0 mmHg/s. Rate clamped to 0.0 mL/h.';
+            } else if (e2Stall === 1) {
+              stallTitle.textContent = 'ALPHA-FLOOR: ENVELOPE CLAMPED';
+              stallDesc.textContent = 'Approaching stall boundary. Infusion rate clamped to 50 percent.';
+            } else {
+              stallTitle.textContent = 'ENVELOPE NOMINAL';
+              stallDesc.textContent = 'Hemodynamic state trajectory within safe physiological flight envelope.';
+            }
+          }
+
+          // Heartbeat liveness: TriPlane sequence counter must advance between polls
+          const heartbeatStatus = document.getElementById('heartbeatStatus');
+          if (heartbeatStatus) {
+            if (lastTriPlaneSeq > 0 && l0.seq_ctr === lastTriPlaneSeq) {
+              heartbeatStatus.textContent = 'HEARTBEAT LOST';
+              heartbeatStatus.className = 'relay-status tripped';
+            } else {
+              heartbeatStatus.textContent = '50ms NOMINAL';
+              heartbeatStatus.className = 'relay-status active';
+            }
+          }
+          lastTriPlaneSeq = l0.seq_ctr;
         }
       }
     } catch (e) {}

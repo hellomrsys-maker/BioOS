@@ -111,3 +111,15 @@ if __name__ == '__main__':
     test_news2_panel_ids_wired()
     test_hazard_h11_override_semantics_in_observation_form()
     print('ALL WEB DOM CONSISTENCY TESTS PASSED!')
+
+def test_dual_engine_crosscheck_wired():
+    html = _read('index.html')
+    js = _read('app.js')
+    for element_id in ('e1RateCell', 'e2RateCell', 'e1StallCell', 'e2StallCell',
+                       'rateSyncDot', 'stallSyncDot', 'stallTitle', 'stallDesc',
+                       'heartbeatStatus'):
+        assert ('id="' + element_id + '"') in html, 'missing element: ' + element_id
+        assert element_id in js, 'not wired in app.js: ' + element_id
+    # Liveness detection must compare TriPlane sequence counters
+    assert 'lastTriPlaneSeq' in js
+    assert 'HEARTBEAT LOST' in js
