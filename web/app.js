@@ -380,6 +380,17 @@ function recalculateBiometrics() {
     resText.textContent = 'SAFE (\u2265 45 mL/min/1.73m\u00b2)';
     detText.textContent = 'Standard dosing permitted (2000 mg/day max).';
   }
+
+  // Mirror the verdict into the biometrics-form panel (both locations live)
+  const formPanel = document.getElementById('ntiCheckResult');
+  const formResult = document.getElementById('metforminResultText');
+  const formDetail = document.getElementById('metforminDetailText');
+  if (formPanel && formResult && formDetail) {
+    formPanel.className = ntiCard.className;
+    formResult.className = resText.className;
+    formResult.textContent = resText.textContent;
+    formDetail.textContent = detText.textContent;
+  }
   syncAmsv();
 }
 
