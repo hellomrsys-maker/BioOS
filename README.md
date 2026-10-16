@@ -164,3 +164,12 @@ All runtime behavior is environment-configurable (see `.env.example`):
 | `BIOOS_KERNEL_LIB` | auto | Plane A cdylib override (dll/so/dylib auto-resolved) |
 
 Auth resolution order for bearer tokens: **OIDC RS256 (when issuer set) -> dev HS256 -> X-Api-Key**. Route permissions per role are defined in `services/rbac_auth.py`.
+
+### 3.5 Sustained-Load Soak Test
+
+```powershell
+cd D:\BIO.OS
+python services\soak_test.py --duration 12 --windows 3
+```
+
+Drives a mixed clinical workload (kernel steps, NEWS2 observations, census matrix, audit reads, shell commands, TriPlane reads) through the live stack and asserts: zero server failures, hash-chain intactness, telemetry growth, clinical-path exercise, and no inter-window latency degradation. The compact 4-second gate runs in CI (`services/test_soak.py`).
