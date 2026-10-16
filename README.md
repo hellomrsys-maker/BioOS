@@ -131,7 +131,7 @@ cargo build --lib --no-default-features --features no_std --target thumbv7em-non
 ```
 Proves the safety kernel is genuinely `#![no_std]` (gated in CI; 64-bit atomics portable via `portable_atomic.rs`).
 
-### 3.3 Kernel WCET Benchmark (first measured numbers)
+### 3.5 Kernel WCET Benchmark (first measured numbers)
 ```powershell
 cd D:\BIO.OS
 python services\wcet_benchmark.py --iters 50000
@@ -141,11 +141,22 @@ Measured host FFI round-trip (Windows, 50k samples): `bioos_kernel_step` p50 ≈
 - Engine 5 (COE): AMD ROCm inference adapter, XGrammar JSON constrained generation, RFC 9162 Merkle tree root hashing.
 - Engine 6 (OCE): Hospital Escalation Index ($E_I$), RTLS 5-stage bed turnover, Massive Hemorrhage Protocol (MHP "7 Ts"), Nurse Standing Orders (Sepsis 1-hr, ACS, Hypoglycemia), ASHRAE 170 HVAC cascades, and HICS 2014 reverse triage.
 
-### 3.3 Interactive Medical Flight Deck
+### 3.6 Interactive Medical Flight Deck
 - Open `http://localhost:8090/` in any modern web browser to interact with live telemetry, trigger occlusion and air-in-line spikes, test the CLSI C56-A potassium gate, simulate mass casualty surge, and inspect the 64-byte AMSV cache-line memory grid.
 
 
 ---
+
+
+
+### 3.7 Sustained-Load Soak Test
+
+```powershell
+cd D:\BIO.OS
+python services\soak_test.py --duration 12 --windows 3
+```
+
+Drives a mixed clinical workload (kernel steps, NEWS2 observations, census matrix, audit reads, shell commands, TriPlane reads) through the live stack and asserts: zero server failures, hash-chain intactness, telemetry growth, clinical-path exercise, and no inter-window latency degradation. The compact 4-second gate runs in CI (`services/test_soak.py`).
 
 ## 4. Runtime Configuration
 
@@ -165,11 +176,7 @@ All runtime behavior is environment-configurable (see `.env.example`):
 
 Auth resolution order for bearer tokens: **OIDC RS256 (when issuer set) -> dev HS256 -> X-Api-Key**. Route permissions per role are defined in `services/rbac_auth.py`.
 
-### 3.5 Sustained-Load Soak Test
 
-```powershell
-cd D:\BIO.OS
-python services\soak_test.py --duration 12 --windows 3
-```
+---
 
-Drives a mixed clinical workload (kernel steps, NEWS2 observations, census matrix, audit reads, shell commands, TriPlane reads) through the live stack and asserts: zero server failures, hash-chain intactness, telemetry growth, clinical-path exercise, and no inter-window latency degradation. The compact 4-second gate runs in CI (`services/test_soak.py`).
+
