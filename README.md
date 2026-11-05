@@ -2,7 +2,11 @@
 ### Tri-Plane Aerospace Safety-Critical Medical & Surgical Robotics AI Operating System
 **Standard Pedigree:** IEC 62304 Class C &bull; ASTM F2761 ICE &bull; Aerospace DO-178C Level A &bull; ISO/IEEE 11073 SDC &bull; CLSI C56-A  
 **Target Hardware:** Tri-Plane Heterogeneous (Rust `#![no_std]` 1000 Hz Actuator & Surgical Virtual-Fixture Kernel + 100 Hz Kalman Observer + Meta Foundation Models & SAM 3.1 Cognitive FMS)  
-**Competition Target:** Meta Global AI Developer Hackathon 2026 (Track: Indie Developer Track &bull; Theme: Push the Frontier &bull; Team: BioFrontier)
+**Competition Target:** Meta Global AI Developer Hackathon 2026 (Track: Indie Developer Track &bull; Theme: Push the Frontier &bull; Team: BioFrontier)  
+**Live Frontier Application:** [https://hellomrsys-maker.github.io/BioOS/](https://hellomrsys-maker.github.io/BioOS/) &bull; [Direct Console](https://hellomrsys-maker.github.io/BioOS/web/)
+
+> [!IMPORTANT]
+> **🚀 Live Web Deployment:** Explore the interactive BioOS Surgical Robotics & Medical Safety Console at **[https://hellomrsys-maker.github.io/BioOS/](https://hellomrsys-maker.github.io/BioOS/)**. Equipped with 3D SimReady digital twin models, intraoperative SAM 3.1 visual guidance, and 128-byte AMSV dual-cache-line memory inspection.
 
 ---
 
@@ -145,8 +149,9 @@ Measured host FFI round-trip (Windows, 50k samples): `bioos_kernel_step` p50 ≈
 - Engine 5 (COE): Meta Model API / Muse-Spark 816B & SAM 3.1 inference adapter, XGrammar JSON constrained generation, RFC 9162 Merkle tree root hashing.
 - Engine 6 (OCE): Hospital Escalation Index ($E_I$), RTLS 5-stage bed turnover, Massive Hemorrhage Protocol (MHP "7 Ts"), Nurse Standing Orders (Sepsis 1-hr, ACS, Hypoglycemia), ASHRAE 170 HVAC cascades, and HICS 2014 reverse triage.
 
-### 3.6 Interactive Medical Flight Deck
-- Open `http://localhost:8090/` in any modern web browser to interact with live telemetry, trigger occlusion and air-in-line spikes, test the CLSI C56-A potassium gate, simulate mass casualty surge, and inspect the 64-byte AMSV cache-line memory grid.
+### 3.6 Interactive Medical Flight Deck & Frontier
+- **Live Cloud Deployment (GitHub Pages):** Access the live web console at [https://hellomrsys-maker.github.io/BioOS/](https://hellomrsys-maker.github.io/BioOS/) (or [direct console path](https://hellomrsys-maker.github.io/BioOS/web/)) to inspect 3D surgical robotics, hospital environments, intraoperative SAM 3.1 visual guidance, and real-time safety interlocks directly in the browser.
+- **Local Runtime Preview:** Open `http://localhost:8090/` (or run `npx serve web -l 3000`) in any modern web browser to interact with live backend telemetry, trigger occlusion and air-in-line spikes, test the CLSI C56-A potassium gate, simulate mass casualty surge, and inspect the 128-byte AMSV cache-line memory grid.
 
 
 ---
