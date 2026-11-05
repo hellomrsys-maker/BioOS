@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BioOS | Clinical Safety and Surgical Operations</title>
+  <meta http-equiv="refresh" content="0; url=web/">
+  <link rel="canonical" href="web/">
+  <script>
+    // Immediate zero-latency navigation preserving query params and hash
+    window.location.replace("web/" + window.location.search + window.location.hash);
+  </script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      background-color: #060913;
+      color: #94a3b8;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      margin: 0;
+      padding: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      text-align: center;
+    }
+    .loader-box {
+      background: #0b1120;
+      border: 1px solid #1e293b;
+      border-radius: 14px;
+      padding: 40px 32px;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.6);
+      max-width: 440px;
+      width: 100%;
+    }
+    .spinner {
+      display: inline-block;
+      width: 32px;
+      height: 32px;
+      border: 3px solid rgba(56, 189, 248, 0.15);
+      border-radius: 50%;
+      border-top-color: #38bdf8;
+      animation: spin 0.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+      margin-bottom: 20px;
+    }
+    h1 {
+      color: #f1f5f9;
+      font-size: 1.4rem;
+      font-weight: 700;
+      margin: 0 0 8px 0;
+      letter-spacing: -0.02em;
+    }
+    .subtitle {
+      color: #38bdf8;
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 16px;
+    }
+    p {
+      color: #64748b;
+      margin: 0 0 24px 0;
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+    a.btn {
+      display: inline-block;
+      background: #0284c7;
+      color: #ffffff;
+      padding: 10px 24px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 0.88rem;
+      transition: background 0.15s ease, transform 0.15s ease;
+    }
+    a.btn:hover {
+      background: #0369a1;
+      transform: translateY(-1px);
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="loader-box">
+    <div class="spinner"></div>
+    <div class="subtitle">BioSentinel OS</div>
+    <h1>BioOS Frontier</h1>
+    <p>Opening clinical safety, device surveillance, and surgical guidance platform...</p>
+    <div>
+      <a class="btn" href="web/">Launch BioOS</a>
+    </div>
+  </div>
+</body>
+</html>

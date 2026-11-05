@@ -8,6 +8,7 @@ pub mod validation;
 
 // New safety-critical modules
 pub mod screening_types;
+pub mod validators;
 pub mod llama_guard_validator;
 pub mod constrained_validator;
 pub mod math_validator;
@@ -35,6 +36,7 @@ pub mod bio_os_kernel;
 pub mod icu_critical_robot;
 pub mod mission_critical_layer;
 pub mod gaps_engine;
+pub mod consistency_control;
 pub mod hal;
 pub mod real_time_data;
 pub mod real_time_writer;
@@ -67,4 +69,5 @@ pub use bio_os_kernel::*;
 pub use icu_critical_robot::*;
 pub use mission_critical_layer::*;
 pub use gaps_engine::*;
+pub use consistency_control::*;
 pub use hal::*;

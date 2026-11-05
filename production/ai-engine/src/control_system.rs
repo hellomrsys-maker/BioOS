@@ -19,7 +19,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
-use crate::operational_rules::Vector3;
+use crate::types::Vector3;
 use crate::clinical_data_comprehensive::*;
 
 // ============================================================================

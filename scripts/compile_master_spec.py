@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# flake8: noqa
 """
 BioOS Master Specification Compiler
 Synthesizes all 8 Markdown source files and the 20-page IEC 62304 Class C Blueprint PDF
