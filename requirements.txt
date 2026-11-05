@@ -7,3 +7,23 @@ anyio==4.14.0
 httpx==0.28.1
 pytest==9.1.0
 pytest-asyncio==1.4.0
+pyjwt==2.9.0
+prometheus-client==0.20.0
+cryptography==43.0.1
+y-py==0.5.6
+redis==5.0.5
+fakeredis==2.23.2
+python-json-logger==2.0.7
+opentelemetry-api==1.25.0
+opentelemetry-sdk==1.25.0
+opentelemetry-instrumentation-fastapi==0.48b0
+
+# SAM 3.1 Vision Integration (Engine 5) - optional, loaded lazily
+# Install with: pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/rocm6.1
+numpy==1.26.4
+opencv-python-headless==4.10.0.84
+torch==2.4.0
+torchvision==0.19.0
+Pillow==10.4.0
+# segment-anything: install from GitHub (no PyPI release yet)
+# pip install git+https://github.com/facebookresearch/segment-anything.git

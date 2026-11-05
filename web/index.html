@@ -1,13 +1,14 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="BioOS Enterprise Medical AI Operating System - Dual-Plane Flight Deck, Hospital Topology, Master Bed Board, and Clinical Wellbeing Console.">
-  <title>BioOS Enterprise // Hospital Healthcare &amp; Clinical Wellbeing OS</title>
+  <meta name="description" content="BioOS is a clinical operations platform concept for patient monitoring, device safety, surgical guidance, and hospital response.">
+  <title>BioOS | Clinical safety and surgical operations</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <script type="module" src="https://unpkg.com/@google/model-viewer@4.1.0/dist/model-viewer.min.js"></script>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -18,48 +19,109 @@
       <div class="brand-titles">
         <div class="brand-row">
           <span class="brand-name">BioOS</span>
-          <span class="brand-tag">Enterprise v2.0-LTS</span>
-          <span class="badge badge-safety">IEC 62304 Class C</span>
-          <span class="badge badge-ice">ASTM F2761 ICE</span>
-          <span class="badge badge-rocm">AMD ROCm 6.2</span>
-          <span class="badge badge-hics">HICS 2014</span>
+          <span class="brand-tag">Clinical operations platform</span>
         </div>
-        <p class="brand-sub">Enterprise Hospital Operating System &bull; 78-Bed Multi-Ward Topology &bull; 1000 Hz Deterministic Rust Safety Microkernel</p>
+        <p class="brand-sub">Patient monitoring, device safety, surgical guidance, and hospital response in one view.</p>
       </div>
     </div>
 
     <!-- Operating Regime Control & Vital Badges -->
     <div class="header-controls">
-      <div class="heartbeat-monitor" id="heartbeatContainer">
-        <span class="heartbeat-pulse" id="heartbeatPulse"></span>
-        <span class="heartbeat-text">KERNEL LOOP: <strong id="loopHz">1000 Hz</strong> (&lt;1 ms)</span>
+      <div class="heartbeat-monitor demo-status-monitor" id="heartbeatContainer">
+        <span class="heartbeat-pulse demo-pulse" id="heartbeatPulse"></span>
+        <span class="heartbeat-text">DATA SOURCE: <strong id="loopHz">Demo simulation</strong></span>
       </div>
 
       <div class="regime-selector">
-        <span class="regime-label">OPERATING REGIME:</span>
+        <span class="regime-label">DEMO SCENARIO:</span>
         <div class="btn-group" role="group" aria-label="Global Operating Regime">
-          <button id="regimeRoutineBtn" class="regime-btn active routine" onclick="setRegime('ROUTINE')">ROUTINE</button>
-          <button id="regimeSurgeBtn" class="regime-btn surge" onclick="setRegime('SURGE')">SURGE</button>
-          <button id="regimeDisasterBtn" class="regime-btn disaster" onclick="setRegime('DISASTER')">DISASTER</button>
+          <button id="regimeRoutineBtn" class="regime-btn active routine" aria-pressed="true" onclick="setRegime('ROUTINE')">ROUTINE</button>
+          <button id="regimeSurgeBtn" class="regime-btn surge" aria-pressed="false" onclick="setRegime('SURGE')">SURGE</button>
+          <button id="regimeDisasterBtn" class="regime-btn disaster" aria-pressed="false" onclick="setRegime('DISASTER')">DISASTER</button>
         </div>
       </div>
     </div>
   </header>
 
+  <section class="product-intro" aria-labelledby="productTitle">
+    <div class="intro-copy">
+      <span class="intro-eyebrow"><span class="intro-live-dot"></span> A SHARED VIEW ACROSS CARE</span>
+      <h1 id="productTitle">Make the next safe action clear.</h1>
+      <p>BioOS is designed to bring bedside observations, device safety rules, surgical guidance, and hospital capacity into one workflow—helping care teams spot risk and review the next safe action.</p>
+      <div class="intro-actions">
+        <button class="intro-primary" onclick="switchView('BEDSIDE_DECK')">Explore patient safety <span aria-hidden="true">&rarr;</span></button>
+        <button class="intro-secondary" onclick="switchView('BED_BOARD')">View hospital operations</button>
+      </div>
+    </div>
+    <div class="workflow-overview" aria-label="How BioOS supports a care team">
+      <div class="workflow-heading"><span>HOW IT WORKS</span><span>INTENDED CARE WORKFLOW</span></div>
+      <div class="workflow-steps">
+        <article class="workflow-step"><span class="workflow-number">01</span><span class="workflow-icon" aria-hidden="true">◎</span><h2>See risk sooner</h2><p>Bring patient observations and early warning signals together.</p><span class="workflow-detail">Patient monitoring</span></article>
+        <span class="workflow-arrow" aria-hidden="true">&rarr;</span>
+        <article class="workflow-step"><span class="workflow-number">02</span><span class="workflow-icon" aria-hidden="true">⬡</span><h2>Check every action</h2><p>Apply device and physiology limits before a command proceeds.</p><span class="workflow-detail">Safety controls</span></article>
+        <span class="workflow-arrow" aria-hidden="true">&rarr;</span>
+        <article class="workflow-step"><span class="workflow-number">03</span><span class="workflow-icon" aria-hidden="true">↗</span><h2>Coordinate a response</h2><p>Give teams a shared view of beds, staffing, and escalation.</p><span class="workflow-detail">Hospital operations</span></article>
+      </div>
+    <div class="workflow-footnote"><span>Designed for clinician oversight</span><span>Device data requires an approved, configured integration</span></div>
+    </div>
+  </section>
+
+  <section class="hospital-explorer" aria-labelledby="hospitalExplorerTitle">
+    <div class="explorer-heading">
+      <div><span class="section-kicker">BIOOS DIGITAL HOSPITAL</span><h2 id="hospitalExplorerTitle">Explore care by room</h2><p>Select a space to see how the BioOS workflow fits into care.</p></div>
+      <span class="demo-connection-badge"><span></span> DEMO ENVIRONMENT</span>
+    </div>
+    <div class="hospital-explorer-grid">
+      <aside class="hospital-room-list" aria-label="Digital hospital rooms">
+        <button class="room-choice active" data-room="operating" onclick="selectHospitalRoom('operating')"><span class="room-icon">OR</span><span><strong>Operating room</strong><small>Surgical guidance &amp; safety</small></span><span class="room-chevron">›</span></button>
+        <button class="room-choice" data-room="bedside" onclick="selectHospitalRoom('bedside')"><span class="room-icon">01</span><span><strong>Bedside care</strong><small>Hospital bed, patient monitor &amp; bedside devices</small></span><span class="room-chevron">›</span></button>
+        <button class="room-choice" data-room="monitoring" onclick="selectHospitalRoom('monitoring')"><span class="room-icon">02</span><span><strong>Monitoring station</strong><small>Vitals &amp; early warning workspace</small></span><span class="room-chevron">›</span></button>
+        <button class="room-choice" data-room="sterile" onclick="selectHospitalRoom('sterile')"><span class="room-icon">03</span><span><strong>Sterile processing</strong><small>Sterilization &amp; equipment readiness</small></span><span class="room-chevron">›</span></button>
+      </aside>
+      <div class="room-stage">
+        <div class="room-scene" id="roomScene" aria-label="Interactive 3D room model">
+          <div class="scene-grid" aria-hidden="true"></div>
+          <div class="scene-ambient scene-ambient-one" aria-hidden="true"></div><div class="scene-ambient scene-ambient-two" aria-hidden="true"></div>
+          <model-viewer id="roomModelViewer" src="models/equipment/surgical-robot.glb" alt="Interactive 3D patient-side surgical robot model" camera-controls auto-rotate auto-rotate-delay="900" rotation-per-second="12deg" shadow-intensity="0.8" exposure="1.05" environment-image="neutral" interaction-prompt="none" ar aria-label="Rotate and zoom the surgical robot model"></model-viewer>
+          <div class="model-placeholder" id="modelPlaceholder" hidden><span>3D MODEL</span><p>Interactive device model</p><small>Load through the application web server for local model access</small></div>
+          <div class="scene-top-label"><span class="scene-live-dot"></span><span id="sceneRoomLabel">OPERATING ROOM</span><span class="scene-mode-pill">3D MODEL · DEMO</span></div>
+          <div class="scene-caption"><span id="sceneModelName">Patient-side surgical robot</span><small id="sceneModelNote">SimReady USD converted to browser-ready GLB · interactive 3D</small></div>
+          <div class="scene-controls-hint">DRAG TO ROTATE <span>·</span> SCROLL TO ZOOM</div>
+        </div>
+        <div class="bedside-model-controls" id="bedsideModelStatus" hidden aria-label="Bedside equipment 3D models">
+          <span>BEDSPACE EQUIPMENT</span>
+          <button id="bedsideBedModel" class="active" onclick="selectEquipment('bed_hospital_standard_a01')"><span>Hospital bed</span><small>BEDSPACE</small></button>
+          <button id="bedsideMonitorModel" onclick="selectEquipment('monitor_patient_a01')"><span>Patient monitor</span><small>BEDSIDE</small></button>
+          <p>Separate equipment models for the bedside setup. Neither represents live device data.</p>
+        </div>
+        <div class="room-info-panel">
+          <div class="room-info-copy"><span class="section-kicker" id="roomKicker">OPERATING ROOM</span><h3 id="roomTitle">Surgical guidance</h3><p id="roomDescription">Relate anatomy and instrument guidance to BioOS’s safety workflow. The current view is an interactive model, not a live surgical camera.</p><div class="room-meta-row"><span class="connection-status"><i></i><strong id="roomConnection">Demo model</strong></span><span id="roomAssetFormat">GLB · browser ready</span></div></div>
+          <div class="room-workflow-card"><span class="workflow-card-label">BIOOS WORKFLOW</span><strong id="roomWorkflowTitle">Surgical safety</strong><p id="roomWorkflowDescription">View the surgical guidance console and virtual fixture demonstration.</p><button id="roomWorkflowButton" onclick="switchView('ROBOTICS')">Open surgical guidance <span>→</span></button></div>
+        </div>
+      </div>
+    </div>
+    <div class="equipment-catalog"><div class="catalog-heading"><div><span class="section-kicker">EQUIPMENT CATALOG</span><h3>More rooms, clearly mapped</h3></div><span>Device models are illustrative until a validated integration is connected.</span></div><div class="catalog-grid" id="catalogGrid"></div></div>
+    <div class="integration-overview"><div class="integration-heading"><div><span class="section-kicker">HOW DEVICE DATA REACHES BIOOS</span><h3>From equipment signal to reviewed clinical context</h3></div><span class="integration-state"><i></i>No device adapter connected</span></div><div class="integration-flow"><article><span>01 · DEVICE</span><strong>Monitor or robot</strong><p>Source measurements and status from supported equipment.</p></article><b>→</b><article><span>02 · INTERFACE</span><strong>Approved gateway</strong><p>FHIR, IEEE 11073 SDC, or a validated vendor adapter.</p></article><b>→</b><article><span>03 · BIOOS</span><strong>Validate &amp; apply limits</strong><p>Normalize, check freshness, and apply the configured safety rules.</p></article><b>→</b><article><span>04 · CARE TEAM</span><strong>Review &amp; respond</strong><p>Present provenance and status for clinician review.</p></article></div><p class="integration-note">This is the target connection pattern. The current demo has no physical device, gateway, or live clinical feed connected.</p></div>
+  </section>
+
   <!-- Enterprise Navigation Tabs -->
   <nav class="enterprise-nav-tabs" aria-label="Hospital Operating Consoles">
-    <button class="nav-tab active" id="tabBedBoard" onclick="switchView('BED_BOARD')">ðŸ¥ 1. Master Bed Board (78 Beds)</button>
-    <button class="nav-tab" id="tabBedsideDeck" onclick="switchView('BEDSIDE_DECK')">âš¡ 2. Bedside Safety Flight Deck</button>
-    <button class="nav-tab" id="tabPharmacy" onclick="switchView('PHARMACY')">ðŸ’Š 3. Pharmacy &amp; NTI Surveillance</button>
-    <button class="nav-tab" id="tabWorkforce" onclick="switchView('WORKFORCE')">ðŸ©º 4. Workforce &amp; Wellbeing Roster</button>
-    <button class="nav-tab" id="tabEarlyWarning" onclick="switchView('EARLY_WARNING')">5. Clinical Early Warning (NEWS2)</button>
-    <button class="nav-tab" id="tabTerminal" onclick="switchView('TERMINAL')">&gt;_ 6. Microkernel Shell (bioos-ctl)</button>
+    <span class="nav-caption">CARE WORKSPACES</span>
+    <button class="nav-tab active" id="tabHome" onclick="switchView('HOME')">Digital hospital</button>
+    <button class="nav-tab" id="tabBedsideDeck" onclick="switchView('BEDSIDE_DECK')">Patient safety</button>
+    <button class="nav-tab" id="tabBedBoard" onclick="switchView('BED_BOARD')">Hospital overview</button>
+    <button class="nav-tab" id="tabRobotics" onclick="switchView('ROBOTICS')">Surgical guidance</button>
+    <button class="nav-tab" id="tabEarlyWarning" onclick="switchView('EARLY_WARNING')">Early warning</button>
+    <button class="nav-tab" id="tabPharmacy" onclick="switchView('PHARMACY')">Medication safety</button>
+    <button class="nav-tab" id="tabWorkforce" onclick="switchView('WORKFORCE')">Staffing &amp; wellbeing</button>
+    <button class="nav-tab" id="tabTerminal" onclick="switchView('TERMINAL')">Engineering tools</button>
   </nav>
+  <div class="workspace-demo-strip"><span>DEMO WORKSPACE</span><span>Example values and simulated visuals · no physical device control connected</span></div>
 
   <!-- Persistent Active Monitored Patient Banner -->
-  <div class="active-patient-banner" id="activePatientBanner">
+  <div class="active-patient-banner" id="activePatientBanner" hidden>
     <div class="banner-left">
-      <span class="banner-badge">CURRENTLY MONITORED BEDSIDE:</span>
+      <span class="banner-badge">SAMPLE PATIENT SCENARIO:</span>
       <strong class="banner-bed-tag" id="bannerBedId">ICU-A-01</strong>
       <span class="banner-separator">&bull;</span>
       <strong id="bannerPatientName">Eleanor Vance (Age 68 F)</strong>
@@ -73,23 +135,23 @@
       <span>Active Infusions: <strong id="bannerInfusions">Norepinephrine, Vasopressin</strong></span>
     </div>
     <div class="banner-right">
-      <button class="banner-action-btn" onclick="switchView('BEDSIDE_DECK')">VIEW LIVE FLIGHT DECK &rarr;</button>
+      <button class="banner-action-btn" onclick="switchView('BEDSIDE_DECK')">VIEW PATIENT SAFETY &rarr;</button>
     </div>
   </div>
 
   <!-- VIEW 1: MASTER BED BOARD (HOSPITAL FLOOR PLAN) -->
-  <section class="hospital-view active-view" id="viewBedBoard">
+  <section class="hospital-view" id="viewBedBoard" hidden>
     <div class="view-header-row">
       <div>
         <h2 class="view-title">Master Hospital Bed Matrix &amp; Departmental Census</h2>
-        <p class="view-sub">Real-time status across all 6 specialized hospital units &bull; 78 Licensed Beds &bull; Dynamic Bed Placement &amp; RTLS Turnover</p>
+        <p class="view-sub">Explore capacity and turnover across six example units. Connect a validated census source before using bed-status figures operationally.</p>
       </div>
       <div class="census-quick-stats" id="censusStatsRow">
         <div class="stat-pill">Total Beds: <strong>78</strong></div>
-        <div class="stat-pill">Occupied: <strong id="censusOccupied">8</strong></div>
-        <div class="stat-pill">Available: <strong id="censusAvailable" class="text-success">68</strong></div>
-        <div class="stat-pill">Turnover / Cleaning: <strong id="censusCleaning" class="text-warning">2</strong></div>
-        <div class="stat-pill">Hospital E_I: <strong id="censusEi" class="text-info">0.122</strong></div>
+        <div class="stat-pill"><span class="census-key occupied-key"></span>Occupied: <strong id="censusOccupied">48</strong></div>
+        <div class="stat-pill"><span class="census-key available-key"></span>Available: <strong id="censusAvailable" class="text-success">23</strong></div>
+        <div class="stat-pill"><span class="census-key cleaning-key"></span>Turnover / Cleaning: <strong id="censusCleaning" class="text-warning">7</strong></div>
+        <div class="stat-pill">Demo scenario: <strong id="censusRegime" class="text-info">ROUTINE</strong></div>
       </div>
     </div>
 
@@ -100,7 +162,7 @@
   </section>
 
   <!-- VIEW 2: BEDSIDE SAFETY FLIGHT DECK (Deep Dive on Selected Bed) -->
-  <section class="hospital-view" id="viewBedsideDeck">
+  <section class="hospital-view" id="viewBedsideDeck" hidden>
     <main class="dashboard-grid">
 
       <!-- Column 1: Plane A Safety Kernel (Rust #![no_std]) -->
@@ -355,7 +417,7 @@
           </div>
           <div class="action-buttons-row">
             <button class="action-btn warning-btn" onclick="simulateSurgeScenario()">Simulate Mass Casualty Surge</button>
-            <button class="action-btn info-btn" onclick="triggerReverseTriageBatch()">Run Reverse Triage Filter (&lt;4% Mort)</button>
+            <button class="action-btn info-btn" onclick="triggerReverseTriageBatch()">Switch to surge demo</button>
           </div>
         </div>
 
@@ -394,18 +456,18 @@
             <button class="action-btn success-btn" onclick="testAlarmFilter(true)">Simulate Transducer Motion Slip (Auto-Suppress)</button>
             <button class="action-btn warning-btn" onclick="testAlarmFilter(false)">Simulate True Desaturation (Emergency Bedside Alarm)</button>
           </div>
-          <div class="alarm-filter-log" id="alarmFilterLog">Alarm suppression filter standby. Real-time sensor fusion active.</div>
+          <div class="alarm-filter-log" id="alarmFilterLog">Alarm filter demo standby. Example sensor events only.</div>
         </div>
       </section>
     </main>
   </section>
 
   <!-- VIEW 3: PHARMACY & NTI SURVEILLANCE -->
-  <section class="hospital-view" id="viewPharmacy">
+  <section class="hospital-view" id="viewPharmacy" hidden>
     <div class="view-header-row">
       <div>
-        <h2 class="view-title">Hospital-Wide Pharmacy &amp; Narrow Therapeutic Index (NTI) Surveillance</h2>
-        <p class="view-sub">Automated Drug-Drug Interaction (DDI) Detection &bull; Dose Error Reduction Systems (DERS) &bull; RFC 9162 Merkle Audit Ledger</p>
+        <h2 class="view-title">Medication safety</h2>
+        <p class="view-sub">Review high-risk infusions and interaction flags. Values remain illustrative until a pharmacy data source is connected.</p>
       </div>
       <button class="action-btn info-btn" onclick="fetchPharmacySurveillance()">Refresh Surveillance</button>
     </div>
@@ -437,7 +499,7 @@
 
       <div class="card">
         <div class="card-title-row">
-          <span class="card-title">Real-Time Drug-Drug Interaction (DDI) &amp; Contraindication Flags</span>
+            <span class="card-title">Drug Interaction &amp; Contraindication Flags</span>
           <span class="pill-metric text-danger" id="pharmDdiCount">1 Active Flag</span>
         </div>
         <div class="ddi-alerts-container" id="pharmDdiBody">
@@ -448,11 +510,11 @@
   </section>
 
   <!-- VIEW 4: WORKFORCE & STAFF WELLBEING -->
-  <section class="hospital-view" id="viewWorkforce">
+  <section class="hospital-view" id="viewWorkforce" hidden>
     <div class="view-header-row">
       <div>
-        <h2 class="view-title">Workforce Management &amp; Acuity-Based Staffing Compliance</h2>
-        <p class="view-sub">Mandated Nurse-to-Patient Ratios &bull; Cognitive Load Index (CLI) Heatmap &bull; Fatigue Safety Lockouts</p>
+        <h2 class="view-title">Staffing &amp; team wellbeing</h2>
+        <p class="view-sub">Explore example staffing and workload views. Connect a workforce source before using these figures operationally.</p>
       </div>
     </div>
 
@@ -515,12 +577,12 @@
 
 
 
-  <!-- 5. Clinical Early Warning (NEWS2) -->
-  <section class="hospital-view" id="viewEarlyWarning">
+  <!-- Clinical Early Warning (NEWS2) -->
+  <section class="hospital-view" id="viewEarlyWarning" hidden>
     <div class="view-header-row">
       <div>
-        <h2 class="view-title">Clinical Early Warning &mdash; RCP NEWS2 (December 2017)</h2>
-        <p class="view-sub">Deterioration trajectory detection &bull; rise &ge; 2 &rArr; urgent review &bull; sustained &ge; 3 &rArr; escalation review &bull; &ge; 7 &rArr; emergency response &bull; advisory only</p>
+        <h2 class="view-title">Early warning review</h2>
+        <p class="view-sub">Review observation trends and advisory risk bands. Scores are not diagnoses; verify observations and escalate through local clinical policy.</p>
       </div>
       <span class="pill-metric text-info" id="ewsMonitoredCount">0 Patients</span>
     </div>
@@ -595,7 +657,7 @@
     </div>
   </section>
 
-  <section class="hospital-view" id="viewTerminal">
+  <section class="hospital-view" id="viewTerminal" hidden>
     <div class="kernel-terminal-section full-terminal">
       <div class="terminal-header-bar">
         <div class="term-title-group">
@@ -618,9 +680,9 @@
         </div>
       </div>
       <div class="terminal-body expanded-body" id="termOutputBody">
-        <div class="term-line welcome-text">BioOS Real-Time Microkernel v2.0-LTS // IEC 62304 Class C Hard Safety Supervisor</div>
-        <div class="term-line welcome-text">Enterprise Multi-Ward Hospital Management System Active (78 Beds Across 6 Units).</div>
-        <div class="term-line welcome-text">Type 'help', 'wards', or 'pharmacy' to query real-time enterprise hospital state.</div>
+        <div class="term-line welcome-text">BioOS clinical operations demo // safety and workflow simulation</div>
+        <div class="term-line welcome-text">Hospital topology shown for demonstration; configure a supported data source for live census.</div>
+        <div class="term-line welcome-text">Type 'help', 'wards', or 'pharmacy' to explore the demo interface.</div>
         <div class="term-line welcome-text">----------------------------------------------------------------------------------</div>
       </div>
       <div class="terminal-input-bar">
@@ -631,16 +693,141 @@
     </div>
   </section>
 
+
+  <!-- VIEW 7: SURGICAL ROBOTICS & META SAM 3.1 INTRAOPERATIVE VISION -->
+  <section class="hospital-view active-view" id="viewRobotics" hidden>
+    <div class="view-header-row">
+      <div>
+        <h2 class="view-title">Autonomous Surgical Robotics &amp; Intraoperative AI Guidance</h2>
+        <p class="view-sub">Surgical guidance concept &bull; interactive anatomy model &bull; simulated trajectory and safety boundary</p>
+      </div>
+      <div class="header-badges-group">
+        <span class="badge badge-meta">Meta Model API</span>
+        <span class="badge badge-sam">SAM 3.1 Vision</span>
+        <span class="badge badge-safety">&lt;2ms Virtual Fixture</span>
+      </div>
+    </div>
+
+    <div class="robotics-dashboard-grid">
+      <!-- Panel 1: 6-DOF Robotic End-Effector Kinematics & Virtual Fixtures -->
+      <div class="card robotics-card">
+        <div class="card-title-row">
+          <span class="card-title">6-DOF Robotic Manipulator Kinematics (Plane A Virtual Fixture)</span>
+          <span class="state-indicator" id="robotInterlockBadge">INTERLOCK: ARMED</span>
+        </div>
+
+        <div class="robot-telemetry-grid">
+          <div class="telem-box">
+            <span class="telem-label">End-Effector Position (XYZ)</span>
+            <strong class="telem-val" id="robotPosDisplay">X: 142.3 mm | Y: 88.1 mm | Z: 34.8 mm</strong>
+            <span class="telem-sub">Coordinate Frame: Surgical Trocar 0</span>
+          </div>
+          <div class="telem-box">
+            <span class="telem-label">Orientation (RPY)</span>
+            <strong class="telem-val" id="robotRotDisplay">R: -1.2° | P: 4.8° | Y: 89.1°</strong>
+            <span class="telem-sub">Euler Tool Center Point (TCP)</span>
+          </div>
+          <div class="telem-box">
+            <span class="telem-label">3-Axis Force Sensing</span>
+            <strong class="telem-val" id="robotForceDisplay">Fx: 0.45 N | Fy: 0.22 N | Fz: 0.68 N</strong>
+            <span class="telem-sub">Safe Ceiling: &le; 2.50 N (DERS Limit)</span>
+          </div>
+          <div class="telem-box">
+            <span class="telem-label">Distance to Critical Artery</span>
+            <strong class="telem-val text-warning" id="robotMarginDisplay">1.42 mm (Warning Zone)</strong>
+            <span class="telem-sub">Lockout Boundary: &lt; 0.80 mm</span>
+          </div>
+        </div>
+
+        <div class="trip-message-box" id="robotMessageBox">
+          Plane A Virtual Fixture Active: Instrument constrained within nominal surgical envelope.
+        </div>
+
+        <div class="action-buttons-row">
+          <button class="action-btn danger-outline" onclick="triggerVirtualFixtureTrip()">Simulate Trajectory Drift (Trigger &lt;2ms Emergency Lockout)</button>
+          <button class="action-btn warning-btn" onclick="injectMotionCompTremor()">Simulate Physiological Tremor (Kalman Motion Cancel)</button>
+          <button class="action-btn reset-btn" onclick="resetRoboticsInterlock()">Reset Robot Interlock &amp; Re-Arm</button>
+        </div>
+      </div>
+
+      <!-- Panel 2: Meta SAM 3.1 Live Intraoperative Vision Feed -->
+      <div class="card vision-card">
+        <div class="card-title-row">
+          <span class="card-title">Illustrative surgical scene</span>
+          <span class="pill-metric badge-sam" id="samStatusBadge">SIMULATED VISUALIZATION</span>
+        </div>
+
+        <div class="vision-canvas-container">
+          <canvas id="samVisionCanvas" width="640" height="360" class="sam-canvas"></canvas>
+          <div class="vision-overlay-legend">
+            <span class="legend-chip legend-tool">■ Robotic Bipolar Tool</span>
+            <span class="legend-chip legend-target">■ Illustrative target region</span>
+            <span class="legend-chip legend-artery">■ Critical Artery (No-Fly Zone)</span>
+            <span class="legend-chip legend-parenchyma">■ Healthy Parenchyma</span>
+          </div>
+        </div>
+
+        <div class="vision-meta-row">
+          <span class="meta-label">Illustrative scene for interaction only; no camera, SAM model, or patient feed is connected.</span>
+        </div>
+      </div>
+
+      <!-- Panel 3: Cognitive Surgical FMS (Meta Muse-Spark (816B/A42B) & Llama-Guard-3) -->
+      <div class="card cognitive-surgical-card">
+        <div class="card-title-row">
+          <span class="card-title">Procedure workflow example</span>
+          <span class="pill-metric badge-meta" id="surgicalFmsBadge">PHASE 3 / 6: DISSECTION</span>
+        </div>
+
+        <div class="fms-checklist-grid">
+          <div class="checklist-item done">
+            <span class="check-icon">✓</span>
+            <div>
+              <strong>Phase 1: Pneumoperitoneum &amp; Trocar Port Placement</strong>
+              <p>Abdominal insufflation stable at 12 mmHg. Verified by Plane A sensor bus.</p>
+            </div>
+          </div>
+          <div class="checklist-item done">
+            <span class="check-icon">✓</span>
+            <div>
+              <strong>Phase 2: Anatomical Margin Identification (SAM 3.1)</strong>
+              <p>Hepatic artery, gallbladder bed, and biliary tract boundaries segmented.</p>
+            </div>
+          </div>
+          <div class="checklist-item active-step">
+            <span class="check-icon">▶</span>
+            <div>
+              <strong>Phase 3: Micro-Vascular Skeletonization &amp; Margin Dissection</strong>
+              <p>Example workflow state only. No AI model is evaluating the current trajectory.</p>
+            </div>
+          </div>
+          <div class="checklist-item pending">
+            <span class="check-icon">○</span>
+            <div>
+              <strong>Phase 4: Specimen Extraction &amp; Hemostasis Verification</strong>
+              <p>Thermal sealing inspection under high-definition fluorescence.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="merkle-proof-row">
+          <span class="chip-label">Audit integration:</span>
+          <code class="code-hash" id="robotMerkleHash">Demo screen — no signed procedure record attached</code>
+        </div>
+      </div>
+    </div>
+
+  </section>
+
   <!-- 128-Byte Tri-Plane Dual-Cache-Line Memory Inspector Bar (Persistent Footer) -->
-  <footer class="amsv-inspector-bar">
+  <footer class="amsv-inspector-bar" hidden>
     <div class="amsv-header-row">
       <div class="amsv-title">
         <span class="amsv-pulse-dot"></span>
-        <strong>128-BYTE TRIPLANE DUAL-CACHE-LINE STATE VECTOR // ZERO-BRIDGE PHYSICAL MEMORY</strong>
+        <strong>DEMO STATE-VECTOR VISUALIZATION // NOT A HARDWARE CONNECTION</strong>
       </div>
       <div class="amsv-details">
-        <span>Address: 0x00007FFE2C7600C0</span>
-        <span>Bound Bed: <strong id="footerBoundBed" class="text-info">ICU-A-01</strong></span>
+        <span>Sample Bed: <strong id="footerBoundBed" class="text-info">ICU-A-01</strong></span>
         <span>Line 0 (Actuator Seq): <strong id="amsvSeqDisplay">148292</strong></span>
         <span>Line 1 (Envelope Seq): <strong id="envSeqDisplay">148292</strong></span>
         <span>CRC-16: <strong id="amsvCrcDisplay">0xE41B</strong></span>

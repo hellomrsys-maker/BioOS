@@ -5,22 +5,35 @@ WORKDIR /build
 # `cargo build` can prefetch/compile dependencies, then overlay real sources.
 COPY crates/bioos-kernel/Cargo.toml crates/bioos-kernel/Cargo.lock ./
 RUN mkdir -p src && printf '' > src/lib.rs && cargo build --release --quiet
-COPY crates/bioos-kernel/src ./src
-RUN touch src/lib.rs && cargo build --release --quiet
 
 # ---------- Stage 2: BioOS Enterprise Runtime (Plane B + Command Center) ----------
 FROM python:3.12-slim
 WORKDIR /app
 
-# Pinned dependencies first (layer cache)
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# ----- Install system dependencies for SAM 3.1 (OpenCV, etc.) -----
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libglib2.0-0 libsm6 libxext6 libxrender-dev libgl1-mesa-glx \
+    && rm -rf /var/lib/apt/lists/*
 
-# Plane A kernel cdylib: kernel_bridge resolves it at
-# crates/bioos-kernel/target/release/libbioos_kernel.so (repo-relative layout preserved)
+# ----- Install Python dependencies -----
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt \
+    && pip install --no-cache-dir git+https://github.com/facebookresearch/segment-anything.git
+
+# ----- Bring in the safety‑kernel cdylib -----
 COPY --from=kernel-builder /build/target/release/libbioos_kernel.so \
      crates/bioos-kernel/target/release/libbioos_kernel.so
 
+# ----- Build the HAL library (C++ shared object) -----
+COPY hal ./hal
+RUN apt-get update && apt-get install -y cmake g++ && \
+    cd hal && mkdir -p build && cd build && \
+    cmake .. && make && \
+    # Copy all built shared objects (hal + drivers) to the system lib dir
+    cp *.so /usr/local/lib/ && \
+    apt-get purge -y --auto-remove cmake g++ && rm -rf /var/lib/apt/lists/*
+
+# ----- Application code -----
 COPY services ./services
 COPY web ./web
 

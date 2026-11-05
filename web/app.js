@@ -1,6 +1,8 @@
-﻿// BioOS Flight Deck Reactive Application Engine
+// BioOS Flight Deck Reactive Application Engine
 // Standard Compliance: IEC 62304 Class C, ASTM F2761, ISO/IEEE 11073 SDC
 // Tri-Plane Aerospace Architecture: Engine 1 (Actuation) + Engine 2 (Kalman Envelope) + Engine 3 (Cognitive FMS)
+
+let hospitalApiConnected = false;
 
 const state = {
   regime: 'ROUTINE',
@@ -67,27 +69,286 @@ document.addEventListener('DOMContentLoaded', () => {
   updateEscalationIndex();
   startKernelTicker();
   startRtlsBedLoop();
+  initRoboticsView();
+  initHospitalExplorer();
+  setRegime('ROUTINE');
 });
+
+// =============================================================================
+// Digital hospital rooms and equipment catalog
+// =============================================================================
+const hospitalRooms = {
+  operating: {
+    label: 'OPERATING ROOM', kicker: 'OPERATING ROOM', title: 'Surgical guidance', model: 'models/equipment/surgical-robot.glb', alt: 'Interactive patient-side surgical robot model',
+    modelName: 'Patient-side surgical robot', modelNote: 'SimReady USD converted to GLB · interactive 3D', format: 'GLB · browser ready', connection: '3D model · no live device feed',
+    description: 'Relate anatomy and instrument guidance to BioOS’s safety workflow. The current view is an interactive model, not a live surgical camera.',
+    workflow: 'Surgical safety', workflowDescription: 'View the surgical guidance console and virtual fixture demonstration.', action: 'Open surgical guidance', view: 'ROBOTICS'
+  },
+  bedside: {
+    label: 'BEDSIDE CARE', kicker: 'BEDSIDE CARE', title: 'Bedside monitoring & patient safety', model: 'models/equipment/hospital-bed.glb', alt: 'Interactive 3D model of the hospital bedside setup with patient bed and monitor',
+    modelName: 'Hospital bed & patient monitor', modelNote: 'Separate bedside models · SimReady USD converted to GLB', format: 'Bedside GLB models · browser ready', connection: '3D models · no live device feed',
+    description: 'A separate bedside view for the hospital bed, patient monitor, and bedside devices. Models are illustrative; they do not stream measurements or control equipment.',
+    workflow: 'Bedside safety checks', workflowDescription: 'Explore patient context, simulated vitals, and safety guard demonstrations.', action: 'Open patient safety', view: 'BEDSIDE_DECK'
+  },
+  monitoring: {
+    label: 'VITALS & EARLY WARNING', kicker: 'MONITORING STATION', title: 'Patient monitoring', model: '', alt: 'Interactive monitoring station model',
+    modelName: 'Monitoring station', modelNote: 'Select an available model from this station’s catalog.', format: 'Choose an available catalog model', connection: '3D model · no live device feed',
+    description: 'Review observation capture and early warning trends. Values shown in the workspace may be demo defaults until a supported data feed is configured.',
+    workflow: 'Early warning review', workflowDescription: 'Review NEWS2 observations and advisory deterioration trends.', action: 'Open early warning', view: 'EARLY_WARNING'
+  },
+  sterile: {
+    label: 'EQUIPMENT READINESS', kicker: 'STERILE PROCESSING', title: 'Hospital operations', model: '', alt: 'Sterile equipment catalog preview',
+    modelName: 'Sterile equipment', modelNote: 'Choose an available model from this room’s equipment catalog.', format: 'Select a converted GLB asset', connection: '3D model · no live device feed',
+    description: 'Explore the operational context around equipment, bed capacity, and workforce readiness. These catalog models are not asset-tracking feeds.',
+    workflow: 'Capacity & readiness', workflowDescription: 'Open the hospital bed board and explore capacity and turnover workflows.', action: 'Open hospital overview', view: 'BED_BOARD'
+  }
+};
+
+const equipmentCatalog = [
+  { category: 'SURGICAL SYSTEMS', name: 'Patient-side surgical robot', asset: 'robotic_system_a01', format: 'USD → GLB', room: 'operating', description: 'Operating-room surgical robot', view: 'ROBOTICS', model: 'models/equipment/surgical-robot.glb', available: true },
+  { category: 'SURGICAL SYSTEMS', name: 'Surgeon console', asset: 'robotic_system_console_b01', format: 'USD → GLB', room: 'operating', description: 'Operating-room master teleoperation cockpit', view: 'ROBOTICS', model: 'models/equipment/surgeon-console.glb', available: true },
+  { category: 'SURGICAL SYSTEMS', name: 'Robotic arm system', asset: 'raise_a3_ultra_t3d0', format: 'USD', room: 'operating', description: 'Articulated robotics system', view: 'ROBOTICS' },
+  { category: 'SURGICAL SYSTEMS', name: 'Surgical robot concept', asset: 'Meshy surgical robot', format: 'FBX', room: 'operating', description: 'Textured multi-arm model', view: 'ROBOTICS' },
+  { category: 'OR EQUIPMENT', name: 'Anesthesia machine', asset: 'anesthesia_machine_a01', format: 'USD', room: 'operating', description: 'Anesthesia workstation', view: 'ROBOTICS' },
+  { category: 'OR EQUIPMENT', name: 'Endoscopy video tower', asset: 'video_system_a01', format: 'USD', room: 'operating', description: 'Laparoscopic imaging tower', view: 'ROBOTICS' },
+  { category: 'OR EQUIPMENT', name: 'Surgical suction pump', asset: 'pump_suction_surgical_a01', format: 'USD', room: 'operating', description: 'Mobile suction equipment', view: 'ROBOTICS' },
+  { category: 'OR EQUIPMENT', name: 'Fluid drainage pump', asset: 'drainage_pumpSystem_a01', format: 'USD', room: 'operating', description: 'Fluid drainage system', view: 'ROBOTICS' },
+  { category: 'OR EQUIPMENT', name: 'Imaging contrast injector', asset: 'sm_CT_injection_system_a01_01', format: 'USD', room: 'operating', description: 'CT contrast delivery system', view: 'ROBOTICS' },
+  { category: 'PATIENT MONITORING', name: 'Patient monitor', asset: 'monitor_patient_a01', format: 'USD → GLB', room: 'bedside', description: 'Multi-parameter bedside monitor', view: 'EARLY_WARNING', model: 'models/equipment/patient-monitor.glb', available: true },
+  { category: 'PATIENT MONITORING', name: 'Portable vitals pad', asset: 'pad_vital_a01', format: 'USD', room: 'monitoring', description: 'Portable vital signs device', view: 'EARLY_WARNING' },
+  { category: 'PATIENT MONITORING', name: 'Vein finder', asset: 'device_vein_finder_a01', format: 'USD', room: 'bedside', description: 'Infrared vein visualization', view: 'BEDSIDE_DECK' },
+  { category: 'PATIENT MONITORING', name: 'Blood line', asset: 'blood_line_a02', format: 'USD', room: 'bedside', description: 'IV and dialysis line', view: 'PHARMACY' },
+  { category: 'PATIENT MONITORING', name: 'Inhaler', asset: 'device_inhaler_a01', format: 'USD', room: 'bedside', description: 'Respiratory medication device', view: 'PHARMACY' },
+  { category: 'PATIENT MONITORING', name: 'Glucose lancing device', asset: 'device_insulin_lancing_a01', format: 'USD', room: 'bedside', description: 'Point-of-care glucose accessory', view: 'PHARMACY' },
+  { category: 'PATIENT MONITORING', name: 'Nebulizer mask', asset: 'mask_nebulization_a01', format: 'USD', room: 'bedside', description: 'Nebulizer patient interface', view: 'BEDSIDE_DECK' },
+  { category: 'CARE ENVIRONMENT', name: 'Hospital bed', asset: 'bed_hospital_standard_a01', format: 'USD → GLB', room: 'bedside', description: 'Articulated patient bed', view: 'BED_BOARD', model: 'models/equipment/hospital-bed.glb', available: true },
+  { category: 'CARE ENVIRONMENT', name: 'Clinical workstation desk', asset: 'desk_a01', format: 'USD', room: 'monitoring', description: 'Clinical workstation furniture', view: 'WORKFORCE' },
+  { category: 'CARE ENVIRONMENT', name: 'Privacy screen', asset: 'screen_hospital_b03', format: 'USD', room: 'bedside', description: 'Mobile care-space divider', view: 'BED_BOARD' },
+  { category: 'CARE ENVIRONMENT', name: 'Sterilization containers', asset: 'container_system_sterilising_b02', format: 'USD', room: 'sterile', description: 'Reusable instrument trays', view: 'WORKFORCE' },
+  { category: 'ANATOMY', name: 'Visceral anatomy', asset: 'a-fully-anatomy-stomach-lungs-heart', format: 'GLB', room: 'operating', description: 'Interactive browser model', view: 'ROBOTICS', available: true },
+  { category: 'ANATOMY', name: 'Human heart', asset: 'human-heart', format: 'OBJ', room: 'monitoring', description: 'High-resolution mesh', view: 'EARLY_WARNING' }
+];
+
+const selectedEquipmentByRoom = { operating: 'robotic_system_a01', bedside: 'bed_hospital_standard_a01' };
+
+function preferredRoomModel(roomId) {
+  const selectedAsset = selectedEquipmentByRoom[roomId];
+  const selectedItem = equipmentCatalog.find((item) => item.asset === selectedAsset && item.room === roomId && item.available);
+  if (selectedItem) return selectedItem;
+  const priorities = {
+    operating: ['robotic_system_a01', 'robotic_system_console_b01', 'raise_a3_ultra_t3d0', 'Meshy surgical robot', 'anesthesia_machine_a01', 'video_system_a01', 'pump_suction_surgical_a01', 'drainage_pumpSystem_a01', 'sm_CT_injection_system_a01_01'],
+    bedside: ['bed_hospital_standard_a01', 'monitor_patient_a01', 'device_vein_finder_a01', 'pad_vital_a01', 'mask_nebulization_a01', 'blood_line_a02', 'device_inhaler_a01'],
+    monitoring: ['pad_vital_a01', 'human-heart', 'desk_a01'],
+    sterile: ['container_system_sterilising_b02', 'screen_hospital_b03'],
+  };
+  const priority = priorities[roomId] || [];
+  return priority.map((asset) => equipmentCatalog.find((item) => item.asset === asset))
+    .find((item) => item && item.available) || null;
+}
+
+function renderBedsideModels() {
+  const viewer = document.getElementById('roomModelViewer');
+  const placeholder = document.getElementById('modelPlaceholder');
+  if (!viewer) return;
+  viewer.setAttribute('camera-orbit', '0deg 68deg 5.5m');
+  viewer.setAttribute('field-of-view', '30deg');
+  viewer.setAttribute('auto-rotate', '');
+  viewer.alt = 'Interactive hospital bedside scene with a hospital bed and patient monitor';
+  const bedsideStatus = document.getElementById('bedsideModelStatus');
+  const bedsideBed = document.getElementById('bedsideBedModel');
+  const bedsideMonitor = document.getElementById('bedsideMonitorModel');
+  const roomItem = preferredRoomModel('bedside');
+  if (!roomItem) return;
+  if (placeholder) placeholder.hidden = true;
+  if (bedsideStatus) bedsideStatus.hidden = false;
+  const bedItem = equipmentCatalog.find((item) => item.asset === 'bed_hospital_standard_a01');
+  const monitorItem = equipmentCatalog.find((item) => item.asset === 'monitor_patient_a01');
+  if (bedsideBed) bedsideBed.disabled = !bedItem?.available;
+  if (bedsideMonitor) bedsideMonitor.disabled = !monitorItem?.available;
+  const showingBed = selectedEquipmentByRoom.bedside === 'bed_hospital_standard_a01';
+  if (bedsideBed) bedsideBed.classList.toggle('active', showingBed);
+  if (bedsideMonitor) bedsideMonitor.classList.toggle('active', !showingBed);
+}
+
+function initHospitalExplorer() {
+  const catalog = document.getElementById('catalogGrid');
+  if (catalog) {
+    const groups = [...new Set(equipmentCatalog.map((item) => item.category))];
+    catalog.innerHTML = groups.map((group) => `<section class="catalog-group"><h4>${group}</h4>${equipmentCatalog.filter((item) => item.category === group).map((item) => {
+      const isReady = Boolean(item.available);
+      return `<button class="catalog-item ${isReady ? 'catalog-available' : ''}" onclick="selectEquipment('${item.asset}')"><span class="catalog-item-icon">${isReady ? '◉' : '◇'}</span><span class="catalog-item-copy"><strong>${item.name}</strong><small>${item.description}</small></span><span class="catalog-item-state">${isReady ? '3D READY' : `${item.format} → GLB`}</span></button>`;
+    }).join('')}</section>`).join('');
+    [...catalog.querySelectorAll('.catalog-item')].forEach((button, index) => {
+      const item = equipmentCatalog[index];
+      if (!item?.model) return;
+      fetch(item.model, { method: 'HEAD' }).then((response) => {
+        if (!response.ok) return;
+        item.available = true;
+        button.classList.add('catalog-available');
+        button.querySelector('.catalog-item-icon').textContent = '◉';
+        button.querySelector('.catalog-item-state').textContent = '3D READY';
+        item.available = true;
+      }).catch(() => {});
+    });
+  }
+  const viewer = document.getElementById('roomModelViewer');
+  if (viewer) {
+    let requestedModel = hospitalRooms.operating.model;
+    let modelLoadError = false;
+    viewer.addEventListener('load', () => {
+      modelLoadError = false;
+      const room = Object.values(hospitalRooms).find((entry) => entry.model === requestedModel);
+      if (room) {
+        const item = equipmentCatalog.find((equipment) => equipment.model === requestedModel);
+        const caption = document.getElementById('sceneModelName');
+        const note = document.getElementById('sceneModelNote');
+        if (caption) caption.textContent = item?.name || room.modelName;
+        if (note) note.textContent = item ? `${item.format} · interactive 3D asset` : room.modelNote;
+      }
+      document.getElementById('modelPlaceholder').hidden = true;
+    });
+    viewer.addEventListener('error', () => {
+      modelLoadError = true;
+      const placeholder = document.getElementById('modelPlaceholder');
+      placeholder.hidden = false;
+      placeholder.innerHTML = '<span>3D MODEL FAILED TO LOAD</span><p>Use the local web server so the browser can read model files.</p><small>Do not open index.html directly as a file</small>';
+    });
+    const viewerFallback = window.setTimeout(() => {
+      if (!customElements.get('model-viewer')) {
+        const placeholder = document.getElementById('modelPlaceholder');
+        placeholder.hidden = false;
+        placeholder.innerHTML = '<span>3D VIEWER UNAVAILABLE</span><p>Load this page through the application web server.</p><small>The model viewer module did not load</small>';
+      }
+    }, 8000);
+    customElements.whenDefined('model-viewer').then(() => {
+      window.clearTimeout(viewerFallback);
+      if (modelLoadError) return;
+      const initialItem = preferredRoomModel('operating');
+      if (initialItem?.model) viewer.src = initialItem.model;
+    });
+    document.querySelectorAll('.room-choice').forEach((button) => {
+      button.addEventListener('click', () => {
+        const item = preferredRoomModel(button.dataset.room);
+        if (!item) return;
+        requestedModel = item.model || 'models/anatomy.glb';
+        showEquipmentModel(requestedModel, item, hospitalRooms[button.dataset.room]);
+      });
+    });
+  }
+}
+
+function selectHospitalRoom(roomId) {
+  const room = hospitalRooms[roomId];
+  if (!room) return;
+  document.querySelectorAll('.room-choice').forEach((button) => button.classList.toggle('active', button.dataset.room === roomId));
+  document.getElementById('sceneRoomLabel').textContent = room.label;
+  document.getElementById('roomKicker').textContent = room.kicker;
+  document.getElementById('roomTitle').textContent = room.title;
+  document.getElementById('roomDescription').textContent = room.description;
+  document.getElementById('sceneModelName').textContent = room.modelName;
+  document.getElementById('sceneModelNote').textContent = room.modelNote;
+  document.getElementById('roomAssetFormat').textContent = room.format;
+  document.getElementById('roomConnection').textContent = room.connection;
+  document.getElementById('roomWorkflowTitle').textContent = room.workflow;
+  document.getElementById('roomWorkflowDescription').textContent = room.workflowDescription;
+  document.getElementById('roomWorkflowButton').innerHTML = `${room.action} <span>→</span>`;
+  document.getElementById('roomWorkflowButton').onclick = () => switchView(room.view);
+  const roomItem = preferredRoomModel(roomId);
+  const modelPath = roomItem?.model || room.model;
+  document.getElementById('roomModelViewer').alt = roomItem ? `Interactive 3D model of ${roomItem.name}` : room.alt;
+  document.getElementById('roomModelViewer').hidden = !modelPath;
+  document.getElementById('modelPlaceholder').hidden = Boolean(modelPath);
+  if (modelPath) document.getElementById('roomModelViewer').src = modelPath;
+  if (roomId === 'bedside') renderBedsideModels();
+  else document.getElementById('bedsideModelStatus').hidden = true;
+  if (roomItem) {
+    document.getElementById('sceneModelName').textContent = roomItem.name;
+    document.getElementById('sceneModelNote').textContent = `${roomItem.format} · interactive 3D asset`;
+    document.getElementById('roomAssetFormat').textContent = roomItem.model ? 'GLB · browser ready' : `${roomItem.format} · source asset`;
+  }
+  else if (!modelPath) document.getElementById('modelPlaceholder').innerHTML = `<span>${room.modelName.toUpperCase()}</span><p>Interactive 3D device view</p><small>${room.modelNote}</small>`;
+}
+
+function showEquipmentModel(modelPath, item, room) {
+  const viewer = document.getElementById('roomModelViewer');
+  const placeholder = document.getElementById('modelPlaceholder');
+  selectedEquipmentByRoom[item.room] = item.asset;
+  selectHospitalRoom(item.room);
+  viewer.hidden = false;
+  placeholder.hidden = true;
+  viewer.alt = `Interactive 3D model of ${item.name}`;
+  viewer.src = modelPath;
+  if (item.room === 'bedside') {
+    const bedsideStatus = document.getElementById('bedsideModelStatus');
+    const bedsideBed = document.getElementById('bedsideBedModel');
+    const bedsideMonitor = document.getElementById('bedsideMonitorModel');
+    if (bedsideStatus) bedsideStatus.hidden = false;
+    if (bedsideBed) bedsideBed.disabled = false;
+    if (bedsideMonitor) bedsideMonitor.disabled = false;
+    if (bedsideBed) bedsideBed.classList.toggle('active', item.asset === 'bed_hospital_standard_a01');
+    if (bedsideMonitor) bedsideMonitor.classList.toggle('active', item.asset === 'monitor_patient_a01');
+    document.getElementById('roomConnection').textContent = '3D model · no live device feed';
+    document.getElementById('roomAssetFormat').textContent = 'GLB · browser ready';
+    document.getElementById('sceneModelName').textContent = `Bedside equipment · ${item.name}`;
+    document.getElementById('sceneModelNote').textContent = 'Bedside 3D asset · select bed or monitor below';
+  }
+}
+
+function selectEquipment(assetName) {
+  const item = equipmentCatalog.find((equipment) => equipment.asset === assetName);
+  if (!item) return;
+  if (item.model && !item.available) {
+    item.available = true;
+    const catalogButton = [...document.querySelectorAll('.catalog-item')].find((button) => button.getAttribute('onclick') === `selectEquipment('${item.asset}')`);
+    if (catalogButton) {
+      catalogButton.classList.add('catalog-available');
+      catalogButton.querySelector('.catalog-item-icon').textContent = '◉';
+      catalogButton.querySelector('.catalog-item-state').textContent = '3D READY';
+    }
+  }
+  selectHospitalRoom(item.room);
+  if (item.available || item.model) {
+    showEquipmentModel(item.model || 'models/anatomy.glb', item, hospitalRooms[item.room]);
+  } else {
+    const room = hospitalRooms[item.room];
+    document.getElementById('roomModelViewer').hidden = true;
+    document.getElementById('modelPlaceholder').hidden = false;
+    document.getElementById('modelPlaceholder').innerHTML = `<span>${item.name.toUpperCase()}</span><p>${item.description}</p><small>${item.format} · source asset pending browser conversion</small>`;
+    document.getElementById('sceneRoomLabel').textContent = room.label;
+    document.getElementById('sceneModelName').textContent = item.name;
+    document.getElementById('sceneModelNote').textContent = `${item.asset} · ${item.format} source asset`;
+    document.getElementById('roomAssetFormat').textContent = `${item.format} · source asset`;
+    document.getElementById('roomConnection').textContent = 'No device connection';
+  }
+  document.getElementById('roomScene').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
 
 // -----------------------------------------------------------------------------
 // Operating Regime Selection
 // -----------------------------------------------------------------------------
 function setRegime(regime) {
+  const scenarios = {
+    ROUTINE: { edCensus: 32, icuCensus: 18, nursesOnDuty: 45, activeOrs: 3, supplyRatio: 0.95 },
+    SURGE: { edCensus: 38, icuCensus: 23, nursesOnDuty: 38, activeOrs: 7, supplyRatio: 0.72 },
+    DISASTER: { edCensus: 40, icuCensus: 25, nursesOnDuty: 30, activeOrs: 10, supplyRatio: 0.38 },
+  };
+  if (!scenarios[regime]) return;
   state.regime = regime;
+  window.demoWardOverride = null;
+  Object.assign(state, scenarios[regime]);
   document.querySelectorAll('.regime-btn').forEach(btn => btn.classList.remove('active'));
-  
-  if (regime === 'ROUTINE') {
-    document.getElementById('regimeRoutineBtn').classList.add('active');
-    state.escalationIndex = 0.345;
-  } else if (regime === 'SURGE') {
-    document.getElementById('regimeSurgeBtn').classList.add('active');
-    state.escalationIndex = 0.580;
-  } else if (regime === 'DISASTER') {
-    document.getElementById('regimeDisasterBtn').classList.add('active');
-    state.escalationIndex = 0.880;
-  }
+  const activeButton = document.getElementById(`regime${regime[0]}${regime.slice(1).toLowerCase()}Btn`);
+  if (activeButton) activeButton.classList.add('active');
+  document.querySelectorAll('.regime-btn').forEach((btn) => btn.setAttribute('aria-pressed', String(btn === activeButton)));
   updateEscalationIndex();
+  const wards = createDemoWards(regime);
+  renderWardsContainer(wards);
+  renderBedBoardSummary(wards);
   syncAmsv();
+}
+
+function resetDemoRegime(regime = 'ROUTINE') {
+  setRegime(regime);
 }
 
 // -----------------------------------------------------------------------------
@@ -415,23 +676,18 @@ function updateEscalationIndex() {
   document.getElementById('icuCensusDisplay').textContent = `${state.icuCensus} / ${state.icuBeds} Beds`;
   document.getElementById('nurseRatioDisplay').textContent = `${state.nursesOnDuty} / ${state.mandatedNurses} Staffed`;
   document.getElementById('orCountDisplay').textContent = `${state.activeOrs} / ${state.totalOrs} Theaters`;
+  const censusRegime = document.getElementById('censusRegime');
+  if (censusRegime) censusRegime.textContent = state.regime;
   syncAmsv();
 }
 
 function simulateSurgeScenario() {
-  state.edCensus = 94;
-  state.icuCensus = 25;
-  state.nursesOnDuty = 24;
-  state.activeOrs = 10;
-  state.supplyRatio = 0.35;
-  setRegime('DISASTER');
+  setRegime('SURGE');
 }
 
 function triggerReverseTriageBatch() {
-  alert("BioOS Reverse Triage (RTTL / Kelen Methodology):\n\nIdentified 14 stable inpatients with < 4.0% 48-hour mortality risk.\nExpedited early discharge initiated. 14 acute beds unlocked.");
-  state.icuCensus = Math.max(12, state.icuCensus - 6);
-  state.edCensus = Math.max(20, state.edCensus - 14);
   setRegime('SURGE');
+  alert("Demo scenario changed to SURGE. Bed and staffing figures are simulated; no real triage, discharge, or backend bed assignments were changed.");
 }
 
 // -----------------------------------------------------------------------------
@@ -444,9 +700,9 @@ function startRtlsBedLoop() {
     steps.forEach((id, idx) => {
       const el = document.getElementById(id);
       if (idx === state.bedStep) {
-        el.classList.add('active');
+      if (el) el.classList.add('active');
       } else {
-        el.classList.remove('active');
+      if (el) el.classList.remove('active');
       }
     });
   }, 2500);
@@ -534,6 +790,15 @@ function syncAmsv() {
 
 let lastTriPlaneSeq = 0;  // liveness: TriPlane seq must advance between polls
 
+function setDataSourceStatus(isConnected) {
+  const value = document.getElementById('loopHz');
+  const monitor = document.getElementById('heartbeatContainer');
+  const pulse = document.getElementById('heartbeatPulse');
+  if (value) value.textContent = isConnected ? 'BioOS backend connected' : 'Demo simulation';
+  if (monitor) monitor.classList.toggle('backend-status-connected', isConnected);
+  if (pulse) pulse.classList.toggle('backend-pulse', isConnected);
+}
+
 function startKernelTicker() {
   setInterval(() => {
     state.seqCtr += 2;
@@ -549,6 +814,8 @@ function startKernelTicker() {
       const resp = await fetch('/api/amsv/triplane');
       if (resp.ok) {
         const data = await resp.json();
+        const backendConnected = Boolean(data && data.cache_line_0_actuation && data.cache_line_1_envelope);
+        setDataSourceStatus(backendConnected);
         if (data && data.cache_line_0_actuation) {
           const l0 = data.cache_line_0_actuation;
           const l1 = data.cache_line_1_envelope;
@@ -617,7 +884,7 @@ function startKernelTicker() {
           lastTriPlaneSeq = l0.seq_ctr;
         }
       }
-    } catch (e) {}
+    } catch (e) { setDataSourceStatus(false); }
   }, 800);
 
   // Poll Wellbeing metrics every 2.5s
@@ -780,11 +1047,13 @@ function handleTermKey(e) {
 function switchView(viewName) {
   // Tab buttons
   const tabs = {
+    'HOME': 'tabHome',
     'BED_BOARD': 'tabBedBoard',
     'BEDSIDE_DECK': 'tabBedsideDeck',
     'PHARMACY': 'tabPharmacy',
     'WORKFORCE': 'tabWorkforce',
     'EARLY_WARNING': 'tabEarlyWarning',
+    'ROBOTICS': 'tabRobotics',
     'TERMINAL': 'tabTerminal'
   };
 
@@ -795,6 +1064,7 @@ function switchView(viewName) {
     'PHARMACY': 'viewPharmacy',
     'WORKFORCE': 'viewWorkforce',
     'EARLY_WARNING': 'viewEarlyWarning',
+    'ROBOTICS': 'viewRobotics',
     'TERMINAL': 'viewTerminal'
   };
 
@@ -814,13 +1084,31 @@ function switchView(viewName) {
     if (viewEl) {
       if (key === viewName) {
         viewEl.classList.add('active-view');
+        viewEl.hidden = false;
       } else {
         viewEl.classList.remove('active-view');
+        viewEl.hidden = true;
       }
     }
   }
 
-  if (viewName === 'BED_BOARD') {
+  const patientBanner = document.getElementById('activePatientBanner');
+  if (patientBanner) patientBanner.hidden = viewName !== 'BEDSIDE_DECK' || !patientBanner.dataset.bedSelected;
+  const intro = document.querySelector('.product-intro');
+  if (intro) intro.hidden = viewName !== 'HOME';
+  const hospitalExplorer = document.querySelector('.hospital-explorer');
+  if (hospitalExplorer) hospitalExplorer.hidden = viewName !== 'HOME';
+  const systemInspector = document.querySelector('.amsv-inspector-bar');
+  if (systemInspector) systemInspector.hidden = viewName !== 'TERMINAL';
+  if (viewName !== 'HOME') {
+    document.querySelector('.enterprise-nav-tabs')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  if (viewName === 'ROBOTICS') {
+    initRoboticsView();
+  } else if (viewName === 'BED_BOARD') {
     fetchHospitalWards();
   } else if (viewName === 'PHARMACY') {
     fetchPharmacySurveillance();
@@ -836,27 +1124,99 @@ function switchView(viewName) {
 // =============================================================================
 let currentSelectedBedId = "ICU-A-01";
 
+function createDemoWards(regime = state.regime) {
+  const wardDefs = [
+    ['ICU-A', 'Intensive Care A', 'ICU', 10, 2, 1], ['ICU-B', 'Intensive Care B', 'ICU', 8, 4, 1],
+    ['ED', 'Emergency', 'ED', 9, 3, 1], ['SURG', 'Surgical Care', 'Surgery', 8, 4, 1],
+    ['MED', 'Medical Care', 'Medicine', 7, 5, 1], ['STEP', 'Step-down Care', 'Step-down', 6, 5, 2],
+  ];
+  const [targetOccupied, targetAvailable, targetCleaning] = ({ ROUTINE: [48, 23, 7], SURGE: [68, 3, 7], DISASTER: [76, 0, 2] })[regime] || [48, 23, 7];
+  let occupiedLeft = targetOccupied, availableLeft = targetAvailable, cleaningLeft = targetCleaning;
+  const wards = wardDefs.map(([id, name, type], wardIndex) => {
+    const occupied = Math.min(13, occupiedLeft); occupiedLeft -= occupied;
+    const available = Math.min(13 - occupied, availableLeft); availableLeft -= available;
+    const cleaning = Math.min(13 - occupied - available, cleaningLeft); cleaningLeft -= cleaning;
+    const beds = Array.from({ length: 13 }, (_, bedIndex) => {
+      const ordinal = bedIndex + 1;
+      const status = ordinal <= occupied ? 'OCCUPIED' : ordinal <= occupied + available ? 'AVAILABLE' : 'CLEANING';
+      const bedId = `${id}-${String(ordinal).padStart(2, '0')}`;
+      const patient = status === 'OCCUPIED' ? {
+        patient_id: `DEMO-${bedId}`, name: `Demo patient ${String(wardIndex * 13 + ordinal).padStart(2, '0')}`,
+        age: 34 + ((wardIndex * 7 + ordinal * 3) % 58), sex: ordinal % 2 ? 'F' : 'M',
+        diagnosis: ['Post-operative recovery', 'Sepsis observation', 'Respiratory support', 'Cardiac monitoring'][(wardIndex + ordinal) % 4],
+        vitals: { map: 66 + ((ordinal + wardIndex) % 22), hr: 72 + ((ordinal * 3) % 34), spo2: 93 + ((ordinal + wardIndex) % 7) },
+      } : null;
+      return { bed_id: bedId, bed_number: String(ordinal).padStart(2, '0'), is_occupied: status === 'OCCUPIED', status, patient,
+        is_negative_pressure: type === 'ICU' && ordinal <= 3, hvac_pa: type === 'ICU' && ordinal <= 3 ? -2.5 : 0 };
+    });
+    return { ward_id: id, name, floor: wardIndex < 2 ? 3 : wardIndex < 4 ? 2 : 1, ward_type: type, capacity: 13,
+      occupied, occupancy_pct: Math.round(occupied / 13 * 100), staffed_nurses: Math.max(3, Math.round(occupied / 2)),
+      required_nurses: Math.max(4, Math.ceil(occupied / 2)), in_staffing_ratio: true, beds };
+  });
+  if (occupiedLeft || availableLeft || cleaningLeft) throw new Error(`Demo census does not fit the 78-bed matrix for ${regime}.`);
+  return wards;
+}
+
+function renderBedBoardSummary(wards = createDemoWards(state.regime)) {
+  const beds = wards.flatMap((ward) => ward.beds || []);
+  const values = {
+    censusOccupied: beds.filter((bed) => bed.is_occupied).length,
+    censusAvailable: beds.filter((bed) => !bed.is_occupied && bed.status === 'AVAILABLE').length,
+    censusCleaning: beds.filter((bed) => !bed.is_occupied && bed.status !== 'AVAILABLE').length,
+  };
+  Object.entries(values).forEach(([id, value]) => { const element = document.getElementById(id); if (element) element.textContent = value; });
+  const regimeElement = document.getElementById('censusRegime');
+  if (regimeElement) regimeElement.textContent = state.regime;
+  const capacity = beds.length;
+  const totalElement = document.querySelector('#censusStatsRow .stat-pill');
+  if (totalElement) totalElement.innerHTML = `Total Beds: <strong>${capacity}</strong>`;
+}
+
 async function fetchHospitalWards() {
+  const demoWards = window.demoWardOverride || createDemoWards(state.regime);
+  renderWardsContainer(demoWards);
+  renderBedBoardSummary(demoWards);
   try {
     const [wardsRes, topoRes] = await Promise.all([
       fetch('/api/hospital/wards'),
       fetch('/api/hospital/topology')
     ]);
 
-    if (topoRes.ok) {
+    if (topoRes.ok && wardsRes.ok) {
       const topo = await topoRes.json();
-      document.getElementById('censusOccupied').textContent = topo.occupied_beds;
-      document.getElementById('censusAvailable').textContent = topo.available_ready_beds;
-      document.getElementById('censusCleaning').textContent = topo.dirty_turnover_beds;
-      document.getElementById('censusEi').textContent = topo.escalation_index;
+      {
+        const liveOccupied = document.getElementById('censusOccupied'); if (liveOccupied) liveOccupied.textContent = topo.occupied_beds;
+        const liveAvailable = document.getElementById('censusAvailable'); if (liveAvailable) liveAvailable.textContent = topo.available_ready_beds;
+        const liveCleaning = document.getElementById('censusCleaning'); if (liveCleaning) liveCleaning.textContent = topo.dirty_turnover_beds;
+      }
     }
 
     if (wardsRes.ok) {
       const wards = await wardsRes.json();
-      renderWardsContainer(wards);
+      if (Array.isArray(wards) && wards.length) {
+        hospitalApiConnected = true;
+        window.demoWardOverride = null;
+        setDataSourceStatus(true);
+        renderWardsContainer(wards);
+        renderBedBoardSummary(wards);
+        if (topoRes.ok) {
+          const topology = await topoRes.json();
+          const ei = document.getElementById('eiPillDisplay');
+          const bar = document.getElementById('eiProgressBar');
+          if (ei) ei.textContent = `E_I = ${topology.escalation_index}`;
+          if (bar) bar.style.width = `${Math.min(100, topology.escalation_index * 100)}%`;
+        }
+      } else {
+        hospitalApiConnected = false;
+        setDataSourceStatus(false);
+      }
+    } else {
+      hospitalApiConnected = false;
+      setDataSourceStatus(false);
     }
   } catch (err) {
-    console.error("Error fetching hospital wards:", err);
+    hospitalApiConnected = false;
+    setDataSourceStatus(false);
   }
 }
 
@@ -865,6 +1225,7 @@ function renderWardsContainer(wards) {
   if (!container) return;
 
   container.innerHTML = '';
+  const demoMode = !hospitalApiConnected;
 
   wards.forEach(w => {
     const panel = document.createElement('div');
@@ -899,7 +1260,7 @@ function renderWardsContainer(wards) {
 
       let innerHtml = `
         <div class="bed-card-header">
-          <span class="bed-number">${b.bed_number}</span>
+          <span class="bed-number">${w.ward_id}-${b.bed_number}</span>
           <span class="bed-status-pill ${occClass}">${b.status}</span>
         </div>
       `;
@@ -907,7 +1268,7 @@ function renderWardsContainer(wards) {
       if (b.patient) {
         const p = b.patient;
         innerHtml += `
-          <div class="bed-patient-name">${p.name} (${p.age}${p.sex})</div>
+          <div class="bed-patient-name">${p.name}${demoMode ? ' · DEMO' : ''} <small>(${p.age} · ${p.sex})</small></div>
           <div class="bed-patient-diag">${p.diagnosis}</div>
           <div class="bed-vitals-row">
             <span class="bed-vital-item">MAP: <strong>${p.vitals.map}</strong></span>
@@ -915,17 +1276,15 @@ function renderWardsContainer(wards) {
             <span class="bed-vital-item">SpO2: <strong>${p.vitals.spo2}%</strong></span>
           </div>
           <div class="bed-actions-row">
-            <button class="bed-btn-sm" onclick="event.stopPropagation(); selectBed('${b.bed_id}'); switchView('BEDSIDE_DECK');">Flight Deck</button>
-            <button class="bed-btn-sm" onclick="event.stopPropagation(); dischargePatient('${p.patient_id}');">Discharge</button>
+            <button class="bed-btn-sm" onclick="event.stopPropagation(); selectBed('${b.bed_id}'); switchView('BEDSIDE_DECK');">${demoMode ? 'Demo details' : 'Flight Deck'}</button>
+            <button class="bed-btn-sm" onclick="event.stopPropagation(); requestBedDischarge('${p.patient_id}', '${b.bed_id}');">Discharge</button>
           </div>
         `;
       } else {
         innerHtml += `
-          <div class="bed-patient-name text-muted">${b.status === 'AVAILABLE' ? 'Ready for Inflow' : 'EVS Terminal Cleaning'}</div>
-          <div class="bed-patient-diag">${b.is_negative_pressure ? `AIIR Negative Pressure (${b.hvac_pa} Pa)` : 'Standard Pressure Pod'}</div>
-          <div class="bed-actions-row">
-            <button class="bed-btn-sm" onclick="event.stopPropagation(); quickAdmitPrompt('${w.ward_id}', '${b.bed_id}');">Admit Patient</button>
-          </div>
+          <div class="bed-patient-name text-muted">${b.status === 'AVAILABLE' ? 'Ready for admission' : 'Cleaning / turnover'}${demoMode ? ' · DEMO' : ''}</div>
+          <div class="bed-patient-diag">${b.is_negative_pressure ? `Negative pressure room · ${b.hvac_pa} Pa` : 'Standard pressure room'}</div>
+          <div class="bed-actions-row"><button class="bed-btn-sm" onclick="event.stopPropagation(); quickAdmitPrompt('${w.ward_id}', '${b.bed_id}');">Admit demo patient</button></div>
         `;
       }
 
@@ -943,6 +1302,18 @@ async function selectBed(bedId) {
   const footerEl = document.getElementById('footerBoundBed');
   if (footerEl) footerEl.textContent = bedId;
 
+  if (!hospitalApiConnected) {
+    const bed = (window.demoWardOverride || createDemoWards(state.regime)).flatMap((ward) => ward.beds).find((entry) => entry.bed_id === bedId);
+    const banner = document.getElementById('activePatientBanner');
+    if (banner) { banner.hidden = false; banner.dataset.bedSelected = 'true'; }
+    document.getElementById('bannerBedId').textContent = bedId;
+    document.getElementById('bannerPatientName').textContent = bed?.patient ? `${bed.patient.name} (Age ${bed.patient.age} ${bed.patient.sex})` : 'Bed unoccupied';
+    document.getElementById('bannerDiagnosis').textContent = bed?.patient?.diagnosis || 'Ready for demo admission';
+    document.getElementById('bannerMap').textContent = bed?.patient ? `${bed.patient.vitals.map} mmHg` : '--';
+    document.getElementById('bannerInfusions').textContent = 'Demo scenario only';
+    return;
+  }
+
   try {
     const res = await fetch('/api/hospital/select_bed', {
       method: 'POST',
@@ -951,6 +1322,8 @@ async function selectBed(bedId) {
     });
     if (res.ok) {
       const data = await res.json();
+      const banner = document.getElementById('activePatientBanner');
+      if (banner) { banner.hidden = false; banner.dataset.bedSelected = 'true'; }
       if (data.patient) {
         const p = data.patient;
         document.getElementById('bannerBedId').textContent = bedId;
@@ -986,7 +1359,32 @@ async function selectBed(bedId) {
   fetchHospitalWards();
 }
 
-async function dischargePatient(patientId) {
+function requestBedDischarge(patientId, bedId) {
+  if (!hospitalApiConnected) return runLocalBedAction(bedId, 'discharge');
+  return dischargePatient(patientId, bedId);
+}
+
+function runLocalBedAction(bedId, action, demoPatientName = 'Demo patient') {
+  const wards = window.demoWardOverride || createDemoWards(state.regime);
+  const bed = wards.flatMap((ward) => ward.beds).find((entry) => entry.bed_id === bedId);
+  if (!bed) return;
+  if (action === 'admit') {
+    bed.status = 'OCCUPIED';
+    bed.is_occupied = true;
+    bed.patient = { patient_id: `DEMO-${bedId}`, name: demoPatientName, age: 54, sex: 'F', diagnosis: 'Demo admission', vitals: { map: 78, hr: 82, spo2: 97 } };
+  } else if (action === 'discharge') {
+    bed.status = 'CLEANING';
+    bed.is_occupied = false;
+    bed.patient = null;
+  }
+  // Hold the interactive local changes until the next scenario selection or refresh.
+  window.demoWardOverride = wards;
+  renderWardsContainer(wards);
+  renderBedBoardSummary(wards);
+}
+
+async function dischargePatient(patientId, bedId = currentSelectedBedId) {
+  if (!hospitalApiConnected) return runLocalBedAction(bedId, 'discharge');
   if (!confirm(`Confirm discharge order for Patient ${patientId}? Bed will immediately cycle to DIRTY and dispatch EVS cleaning.`)) return;
 
   try {
@@ -1006,6 +1404,11 @@ async function dischargePatient(patientId) {
 }
 
 async function quickAdmitPrompt(wardId, bedId) {
+  if (!hospitalApiConnected) {
+    const name = prompt(`Enter a demo patient label for ${bedId}:`, 'Demo patient');
+    if (name) runLocalBedAction(bedId, 'admit', name);
+    return;
+  }
   const name = prompt(`Enter patient full name to admit into ${bedId}:`, "Alex Morgan");
   if (!name) return;
   const diag = prompt("Enter primary admission diagnosis:", "Acute Sepsis / Hypotension");
@@ -1310,4 +1713,243 @@ function resetActuator() {
   document.getElementById('bubbleSlider').value = 0;
   updatePressure(180);
   updateBubble(0);
+}
+
+
+// =============================================================================
+// Surgical Robotics & Meta SAM 3.1 Vision Subsystem
+// =============================================================================
+let roboticsInitialized = false;
+let roboticsTripped = false;
+let roboticsTimer = null;
+let samPromptPoint = { x: 320, y: 180 };
+let robotState = {
+  x: 142.3,
+  y: 88.1,
+  z: 34.8,
+  r: -1.2,
+  p: 4.8,
+  yaw: 89.1,
+  fx: 0.45,
+  fy: 0.22,
+  fz: 0.68,
+  margin: 1.42
+};
+
+function initRoboticsView() {
+  const canvas = document.getElementById('samVisionCanvas');
+  if (canvas && !roboticsInitialized) {
+    canvas.addEventListener('click', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      samPromptPoint = {
+        x: (e.clientX - rect.left) * scaleX,
+        y: (e.clientY - rect.top) * scaleY
+      };
+      drawSamSurgicalScene();
+    });
+    roboticsInitialized = true;
+  }
+
+  if (!roboticsTimer) {
+    roboticsTimer = setInterval(() => {
+      if (!roboticsTripped) {
+        // Natural micro-kinematic breathing drift
+        const t = Date.now() / 1000;
+        robotState.x = 142.0 + Math.sin(t * 1.5) * 0.4;
+        robotState.y = 88.0 + Math.cos(t * 1.2) * 0.3;
+        robotState.z = 34.8 + Math.sin(t * 0.8) * 0.2;
+        robotState.fx = Math.max(0.1, 0.45 + Math.sin(t * 2.0) * 0.15);
+        robotState.fy = Math.max(0.1, 0.22 + Math.cos(t * 1.7) * 0.08);
+        robotState.fz = Math.max(0.2, 0.68 + Math.sin(t * 1.1) * 0.18);
+        robotState.margin = Math.max(1.1, 1.42 + Math.sin(t * 1.4) * 0.25);
+        updateRoboticsTelemetryUI();
+      }
+      drawSamSurgicalScene();
+    }, 100);
+  }
+}
+
+function updateRoboticsTelemetryUI() {
+  const posEl = document.getElementById('robotPosDisplay');
+  const rotEl = document.getElementById('robotRotDisplay');
+  const forceEl = document.getElementById('robotForceDisplay');
+  const marginEl = document.getElementById('robotMarginDisplay');
+
+  if (posEl) posEl.textContent = `X: ${robotState.x.toFixed(1)} mm | Y: ${robotState.y.toFixed(1)} mm | Z: ${robotState.z.toFixed(1)} mm`;
+  if (rotEl) rotEl.textContent = `R: ${robotState.r.toFixed(1)}° | P: ${robotState.p.toFixed(1)}° | Y: ${robotState.yaw.toFixed(1)}°`;
+  if (forceEl) forceEl.textContent = `Fx: ${robotState.fx.toFixed(2)} N | Fy: ${robotState.fy.toFixed(2)} N | Fz: ${robotState.fz.toFixed(2)} N`;
+  if (marginEl) {
+    if (robotState.margin < 0.8) {
+      marginEl.className = 'telem-val text-danger';
+      marginEl.textContent = `${robotState.margin.toFixed(2)} mm (CRITICAL BREACH)`;
+    } else if (robotState.margin < 1.5) {
+      marginEl.className = 'telem-val text-warning';
+      marginEl.textContent = `${robotState.margin.toFixed(2)} mm (Warning Zone)`;
+    } else {
+      marginEl.className = 'telem-val text-success';
+      marginEl.textContent = `${robotState.margin.toFixed(2)} mm (Safe Corridor)`;
+    }
+  }
+}
+
+function drawSamSurgicalScene() {
+  const canvas = document.getElementById('samVisionCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width;
+  const h = canvas.height;
+
+  // Background laparoscopic cavity gradient
+  const grad = ctx.createRadialGradient(w/2, h/2, 50, w/2, h/2, w/2);
+  grad.addColorStop(0, '#2d0c14');
+  grad.addColorStop(0.7, '#140509');
+  grad.addColorStop(1, '#050204');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, w, h);
+
+  // Healthy Parenchyma background texture
+  ctx.fillStyle = 'rgba(52, 211, 153, 0.08)';
+  ctx.beginPath();
+  ctx.ellipse(w * 0.45, h * 0.55, 220, 140, 0.2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Resection Target Lesion (Segmented by SAM 3.1)
+  ctx.fillStyle = 'rgba(192, 132, 252, 0.35)';
+  ctx.strokeStyle = '#c084fc';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.ellipse(w * 0.42, h * 0.45, 65, 45, -0.15, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Target Label
+  ctx.fillStyle = '#c084fc';
+  ctx.font = '10px "JetBrains Mono", monospace';
+  ctx.fillText('ILLUSTRATIVE TARGET REGION', w * 0.34, h * 0.35);
+
+  // Critical Artery (Plane A Forbidden Virtual Fixture Zone)
+  ctx.fillStyle = 'rgba(244, 63, 94, 0.4)';
+  ctx.strokeStyle = '#f43f5e';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.ellipse(w * 0.65, h * 0.48, 48, 75, 0.35, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Artery Warning Pulse
+  const pulseR = 55 + Math.sin(Date.now() / 250) * 4;
+  ctx.strokeStyle = 'rgba(244, 63, 94, 0.5)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.ellipse(w * 0.65, h * 0.48, pulseR * 0.8, pulseR * 1.2, 0.35, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.fillStyle = '#f43f5e';
+  ctx.font = 'bold 11px "JetBrains Mono", monospace';
+  ctx.fillText('NO-FLY ZONE: HEPATIC ARTERY', w * 0.55, h * 0.38);
+
+  // Robotic Micro-Tool (Tracked End-Effector)
+  const toolX = roboticsTripped ? w * 0.63 : w * 0.46;
+  const toolY = roboticsTripped ? h * 0.47 : h * 0.42;
+
+  // Tool shaft
+  ctx.strokeStyle = '#38bdf8';
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.moveTo(w * 0.1, h * 0.85);
+  ctx.lineTo(toolX, toolY);
+  ctx.stroke();
+
+  // Tool jaws
+  ctx.fillStyle = '#38bdf8';
+  ctx.beginPath();
+  ctx.arc(toolX, toolY, 7, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Tool tracking bounding box (SAM 3.1)
+  ctx.strokeStyle = 'rgba(56, 189, 248, 0.8)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(toolX - 18, toolY - 18, 36, 36);
+  ctx.fillStyle = '#38bdf8';
+  ctx.font = '9px "JetBrains Mono", monospace';
+  ctx.fillText('BIPOLAR TOOL', toolX - 22, toolY - 22);
+
+  // User Interactive Prompt Point
+  ctx.strokeStyle = '#ffff00';
+  ctx.fillStyle = '#ffff00';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(samPromptPoint.x, samPromptPoint.y, 4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeRect(samPromptPoint.x - 8, samPromptPoint.y - 8, 16, 16);
+  ctx.font = '9px "JetBrains Mono", monospace';
+  ctx.fillText('SAM PROMPT', samPromptPoint.x + 10, samPromptPoint.y - 4);
+}
+
+function triggerVirtualFixtureTrip() {
+  roboticsTripped = true;
+  robotState.x = 158.4;
+  robotState.y = 92.6;
+  robotState.margin = 0.62;
+  robotState.fx = 2.15;
+
+  const card = document.querySelector('.robotics-card');
+  if (card) card.classList.add('tripped');
+
+  const badge = document.getElementById('robotInterlockBadge');
+  if (badge) {
+    badge.className = 'state-indicator text-danger';
+    badge.textContent = 'TRIP: MECHANICAL LOCKOUT (0.81 ms)';
+  }
+
+  const msg = document.getElementById('robotMessageBox');
+  if (msg) {
+    msg.className = 'trip-message-box danger';
+    msg.innerHTML = '<strong>[PLANE A VIRTUAL FIXTURE TRIP]</strong> No-fly zone boundary breach attempted at 0.62 mm. Solid-state relay decoupled motor power in 0.81 ms. Zero tissue violation.';
+  }
+
+  updateRoboticsTelemetryUI();
+}
+
+function injectMotionCompTremor() {
+  const msg = document.getElementById('robotMessageBox');
+  if (msg) {
+    msg.className = 'trip-message-box';
+    msg.innerHTML = '<strong>[PLANE C KALMAN MOTION COMP]</strong> Physiological cardiac tremor of 4.2 mm detected. Continuous EKF velocity tracking applied reverse compensation. Net tool jitter: &plusmn;0.03 mm.';
+  }
+}
+
+function resetRoboticsInterlock() {
+  roboticsTripped = false;
+  robotState = {
+    x: 142.3,
+    y: 88.1,
+    z: 34.8,
+    r: -1.2,
+    p: 4.8,
+    yaw: 89.1,
+    fx: 0.45,
+    fy: 0.22,
+    fz: 0.68,
+    margin: 1.42
+  };
+
+  const card = document.querySelector('.robotics-card');
+  if (card) card.classList.remove('tripped');
+
+  const badge = document.getElementById('robotInterlockBadge');
+  if (badge) {
+    badge.className = 'state-indicator';
+    badge.textContent = 'INTERLOCK: ARMED';
+  }
+
+  const msg = document.getElementById('robotMessageBox');
+  if (msg) {
+    msg.className = 'trip-message-box';
+    msg.textContent = 'Plane A Virtual Fixture Active: Instrument constrained within nominal surgical envelope.';
+  }
+
+  updateRoboticsTelemetryUI();
 }

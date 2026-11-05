@@ -1,22 +1,23 @@
 # BioOS (BioSentinel OS)
-### Tri-Plane Aerospace Safety-Critical Medical AI Operating System
+### Tri-Plane Aerospace Safety-Critical Medical & Surgical Robotics AI Operating System
 **Standard Pedigree:** IEC 62304 Class C &bull; ASTM F2761 ICE &bull; Aerospace DO-178C Level A &bull; ISO/IEEE 11073 SDC &bull; CLSI C56-A  
-**Target Hardware:** Tri-Plane Heterogeneous (Rust `#![no_std]` 1000 Hz Actuator Kernel + 100 Hz Kalman Envelope Limiter + AMD Instinct MI300X ROCm 6.2 Cognitive FMS)  
-**Competition Target:** AMD Developer Hackathon: ACT III (Track 2: Health & Wellbeing + Evolus Partner Track)
+**Target Hardware:** Tri-Plane Heterogeneous (Rust `#![no_std]` 1000 Hz Actuator & Surgical Virtual-Fixture Kernel + 100 Hz Kalman Observer + Meta Foundation Models & SAM 3.1 Cognitive FMS)  
+**Competition Target:** Meta Global AI Developer Hackathon 2026 (Track: Indie Developer Track &bull; Theme: Push the Frontier &bull; Team: BioFrontier)
 
 ---
 
 ## 1. Tri-Plane Aerospace Architecture
 
-BioOS applies commercial avionics-grade redundancy (analogous to multi-engine fly-by-wire aircraft such as the Airbus A350 and Boeing 787):
-> *"Software and artificial intelligence are probabilistic and subject to latency, drift, and hallucination; physical medical hardware requires zero-failure, hard real-time determinism."*
+BioOS applies commercial avionics-grade redundancy (analogous to multi-engine fly-by-wire aircraft such as the Airbus A350 and Boeing 787) to medical cyber-physical systems and autonomous surgical robotics:
+> *"Software and artificial intelligence are probabilistic and subject to latency, drift, and hallucination; physical medical hardware and surgical robotic arms require zero-failure, hard real-time determinism."*
 
 ```
 +---------------------------------------------------------------------------------------------------+
 |                                 BIOOS TRIPLANE AEROSPACE ARCHITECTURE                             |
 +---------------------------------------------------------------------------------------------------+
-|  PLANE A: ENGINE 1 - FLY-BY-WIRE ACTUATOR SAFETY KERNEL (Rust #![no_std], 1000 Hz, O(1), 0-Heap)  |
-|  - Exclusive Physical Relay Authority (2ms SSR / 12ms Mechanical Air-Gap)                         |
+|  PLANE A: ENGINE 1 - FLY-BY-WIRE ACTUATOR & SURGICAL SAFETY KERNEL (Rust #![no_std], 1000 Hz)     |
+|  - Exclusive Physical Relay Authority (<2ms Solid State Relay / 12ms Mechanical Air-Gap)          |
+|  - Surgical Robotics "Virtual Fixtures": Mechanical no-fly zone lockout protecting vital organs   |
 |  - CLSI C56-A Hemolysis Gate (H > 20 mg/dL => VOID K+ to prevent pseudohyperkalemic arrest)       |
 |  - Hydrostatic Pressure Trip (525 mmHg / 10.2 psi) & Ultrasonic Air-in-Line Trip (>= 25 uL)       |
 |  - Dettli Linear Ceiling Law & Metformin Hard Lockout (eGFR < 30 mL/min/1.73m2)                   |
@@ -28,6 +29,7 @@ BioOS applies commercial avionics-grade redundancy (analogous to multi-engine fl
 +---------------------------------------------------------------------------------------------------+
 |  PLANE C: ENGINE 2 - DYNAMIC PHYSIOLOGICAL ENVELOPE & KALMAN OBSERVER (100 Hz, O(1))               |
 |  - Airbus-Style "Alpha-Floor" Hemodynamic Stall Protection (MAP < 55 mmHg => Rate Clamp to 0.0)   |
+|  - Physiological Motion Compensation: Cancels patient respiratory/cardiac motion for robotic arms |
 |  - Continuous Extended Kalman Filter (EKF) State & Velocity Tracking (MAP, HR, Shock Index)      |
 |  - Dynamic Vasoactive Slew-Rate Acceleration Limiter (d(Rate)/dt <= 2.5 mL/h/sec)                 |
 |  - Real-Time Dynamic Safety Margin Indexing & Receptor Desensitization Guard                      |
@@ -36,9 +38,10 @@ BioOS applies commercial avionics-grade redundancy (analogous to multi-engine fl
                [CACHE LINE 1: 0x40..0x7F (64 Bytes) - ENVELOPE STATE & KALMAN VAR]
                                                   ▼
 +---------------------------------------------------------------------------------------------------+
-|  PLANE B: ENGINE 3 - COGNITIVE FLIGHT MANAGEMENT SYSTEM (AMD Instinct MI300X, ROCm 6.2, vLLM)    |
-|  - XGrammar Constrained JSON Decoding (FHIR R4 MedicationRequest Enums)                           |
-|  - Dual-Model Adversarial Safety Ensemble (Llama-3.1-8B-Instruct + Llama-Guard-3-8B)             |
+|  PLANE B: ENGINE 3 - COGNITIVE FLIGHT MANAGEMENT SYSTEM (Meta Model API & Open-Weights Stack)     |
+|  - Meta SAM 3.1: Real-time laparoscopic / endoscopic surgical scene segmentation (tissues vs tool)|
+|  - Dual-Model Adversarial Safety Ensemble (Meta Muse-Spark-Open-816B-A42B + Llama-Guard-3-8B)         |
+|  - XGrammar Constrained JSON Decoding (FHIR R4 MedicationRequest & Surgical Action Schemas)       |
 |  - RFC 9162 Merkle Tree Audit Trail (SHA-256 Hash Tree & Cryptographic Non-Repudiation)          |
 |  - Hospital Escalation Index (E_I), RTLS 5-Stage Bed Turnover & HICS 2014 Reverse Triage         |
 +---------------------------------------------------------------------------------------------------+
@@ -68,7 +71,7 @@ bio-os/
 │   ├── test_services.py / test_kernel_bridge.py / test_enterprise_fabric.py
 │   ├── test_hl7_mllp.py / test_eval_harness.py / test_ews_engine.py / test_ews_trend.py / test_oidc_auth.py
 │   ├── cognitive_plane/
-│   │   ├── engine5_coe.py                  # AMD Instinct MI300X vLLM + RFC 9162 Merkle Log
+│   │   ├── engine5_coe.py                  # Meta Model API / Muse-Spark 816B + SAM 3.1 + RFC 9162 Merkle Log
 │   │   ├── eval_harness.py                 # 9 golden clinical cases + scoring runner (CI-runnable)
 │   │   └── drift_monitor.py                # Approval-rate control limits (guard-bypass alerts)
 │   └── command_center/
@@ -104,6 +107,7 @@ cargo test
 - `test_realtime_scheduler_edf_dispatch`: Verified deterministic rate-monotonic/EDF task dispatch.
 - `test_spsc_ring_buffer_wait_free_ipc`: Verified wait-free single-producer/single-consumer IPC.
 - `test_static_slab_pool_o1_alloc_free`: Verified O(1) static slab allocation/free with 0-heap guarantee.
+| **`test_realtime_collab`** | Added integration tests for the new real‑time collaboration WebSocket service. |
 - `test_clsi_c56a_potassium_hemolysis_gate`: Verified $H > 20 \implies$ VOID (NaN) pseudohyperkalemia interlock.
 - `test_pump_occlusion_and_air_bubble_trips`: Verified $525\text{ mmHg}$ ($10.2\text{ psi}$) and $\ge 25\ \mu\text{L}$ bubble trips.
 - `test_ckd_epi_and_cockcroft_gault`: Verified race-free eGFR and 3-tier Devine weight selection.
@@ -138,7 +142,7 @@ python services\wcet_benchmark.py --iters 50000
 ```
 Measured host FFI round-trip (Windows, 50k samples): `bioos_kernel_step` p50 ≈ 2.7 µs, p99 ≈ 8.1 µs against the 100 µs budget of the 1000 Hz loop. Max spikes are Windows scheduler preemption artifacts; on-target RTOS budgets are a separate roadmap item.
 **Test Results:**
-- Engine 5 (COE): AMD ROCm inference adapter, XGrammar JSON constrained generation, RFC 9162 Merkle tree root hashing.
+- Engine 5 (COE): Meta Model API / Muse-Spark 816B & SAM 3.1 inference adapter, XGrammar JSON constrained generation, RFC 9162 Merkle tree root hashing.
 - Engine 6 (OCE): Hospital Escalation Index ($E_I$), RTLS 5-stage bed turnover, Massive Hemorrhage Protocol (MHP "7 Ts"), Nurse Standing Orders (Sepsis 1-hr, ACS, Hypoglycemia), ASHRAE 170 HVAC cascades, and HICS 2014 reverse triage.
 
 ### 3.6 Interactive Medical Flight Deck

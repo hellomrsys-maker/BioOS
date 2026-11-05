@@ -1,8 +1,8 @@
 # BioOS (BioSentinel OS) Master Architecture & Data Blueprint
 **System Grade:** IEC 62304 Class C Medical Device Software | ASTM F2761 ICE Compliant | Aerospace DO-178C Level A  
-**Target Hardware:** Heterogeneous Tri-Plane Architecture (x86_64 / ARM Cortex-M Real-Time Safety Kernel + AMD Instinct MI300X / ROCm 6.x Cognitive Accelerators)  
-**Target Event:** AMD Developer Hackathon: ACT III (Track 2: Health and Wellbeing + Evolus Partner Track)  
-**Version:** 2.0.0-PROD (Tri-Plane Aerospace Architecture)  
+**Target Hardware:** Heterogeneous Tri-Plane Architecture (x86_64 / ARM Cortex-M Real-Time Safety Kernel + Meta Foundation Models & SAM 3.1 Cognitive FMS)  
+**Target Event:** Meta Global AI Developer Hackathon 2026 (Track: Indie Developer Track | Theme: Push the Frontier | Team: BioFrontier)  
+**Version:** 2.0.0-PROD (Tri-Plane Aerospace & Surgical Robotics Architecture)  
 
 ---
 

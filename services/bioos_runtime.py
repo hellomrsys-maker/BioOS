@@ -10,6 +10,8 @@ Orchestrates:
 """
 
 import asyncio
+import base64
+import io
 import os
 import sys
 import time
@@ -60,7 +62,7 @@ app.add_middleware(
 print("[BioOS] Booting Plane A Safety Microkernel & Shared Memory...")
 kernel = BioOsKernelBridge()
 
-print("[BioOS] Booting Plane B Cognitive AI Engine (AMD ROCm 6.2)...")
+print("[BioOS] Booting Plane B Cognitive AI Engine (Meta Model API / Llama 3.1 & SAM 3.1)...")
 coe = ClinicalOversightEngine()
 
 print("[BioOS] Booting Engine 6 Enterprise Command Center...")
@@ -888,6 +890,243 @@ def audit_telemetry(limit: int = 100, metric_code: Optional[int] = None) -> Dict
         "total_samples": store.telemetry_count(),
         "samples": store.query_telemetry(metric_code=metric_code, limit=limit),
     }
+
+
+# Surgical Vision API Endpoints (SAM 3.1 Integration)
+# Added for Meta AI Hackathon 2026
+
+from fastapi import WebSocket, WebSocketDisconnect
+import base64
+import io
+
+# Initialize SAM 3.1 integration if available
+_sam31_available = False
+try:
+    from sam31_vision import create_sam31_engine_from_env
+    _sam31_engine = create_sam31_engine_from_env()
+    _sam31_available = True
+    print(f"[BioOS] SAM 3.1 Vision Engine loaded: mode={_sam31_engine.mode}")
+except Exception as e:
+    _sam31_available = False
+    print(f"[BioOS] SAM 3.1 Vision Engine not available: {e}")
+
+
+def _decode_image_base64(b64_string: str):
+    """Decode base64 image to numpy array."""
+    try:
+        img_bytes = base64.b64decode(b64_string)
+        import numpy as np
+        from PIL import Image
+        img = Image.open(io.BytesIO(img_bytes))
+        return np.array(img.convert("RGB"))
+    except Exception as e:
+        raise ValueError(f"Invalid image data: {e}")
+
+
+@app.post("/api/surgical/segment")
+async def surgical_segment_frame(payload: Dict[str, Any]) -> Dict[str, Any]:
+    if not _sam31_available:
+        return JSONResponse(
+            {"error": "SAM 3.1 Vision Engine not available. Set BIOOS_SAM_MODE=MOCK|LOCAL_ROCM|META_API"},
+            status_code=503
+        )
+    
+    patient_id = payload.get("patient_id")
+    if not patient_id:
+        return JSONResponse({"error": "patient_id required"}, status_code=400)
+    
+    image_b64 = payload.get("image_base64")
+    if not image_b64:
+        return JSONResponse({"error": "image_base64 required"}, status_code=400)
+    
+    try:
+        frame = _decode_image_base64(image_b64)
+        
+        mode_str = payload.get("mode", "AUTOMATIC").upper()
+        try:
+            from sam31_vision import SegmentationMode
+            mode = SegmentationMode(mode_str.lower())
+        except ValueError:
+            mode = SegmentationMode.AUTOMATIC
+        
+        prompt_points = payload.get("prompt_points")
+        prompt_labels = payload.get("prompt_labels")
+        prompt_box = payload.get("prompt_box")
+        
+        result = coe.process_surgical_frame(
+            frame=frame,
+            patient_id=patient_id,
+            prompt_points=prompt_points,
+        )
+        
+        if result is None:
+            return JSONResponse({"error": "SAM 3.1 processing failed"}, status_code=500)
+        
+        segmentation = result["segmentation"]
+        response = {
+            "patient_id": patient_id,
+            "timestamp_ns": segmentation.frame_timestamp_ns,
+            "frame_shape": segmentation.frame_shape,
+            "mode": segmentation.mode.value,
+            "processing_ms": segmentation.processing_ms,
+            "model_version": segmentation.model_version,
+            "structures_detected": [s.value for s in segmentation.structures],
+            "scores": segmentation.scores,
+            "bboxes": segmentation.bboxes,
+            "virtual_fixtures": [
+                {
+                    "fixture_id": f.fixture_id,
+                    "structure": f.structure.value,
+                    "enforcement": f.enforcement_level,
+                    "metric_code": f.plane_a_metric_code,
+                    "bbox": _sam31_engine._mask_to_bbox(f.mask) if f.mask.any() else [0, 0, 0, 0],
+                    "safety_margin_px": f.safety_margin_px,
+                }
+                for f in result["virtual_fixtures"]
+            ],
+            "surgical_phase": result["surgical_phase"],
+            "plane_a_payload": result["plane_a_payload"],
+            "fhir_observation": result["fhir_observation"],
+            "merkle_hash": result["merkle_hash"],
+            "merkle_root": result["merkle_root"],
+@app.post("/api/surgical/segment_batch")
+async def surgical_segment_batch(payload: Dict[str, Any]) -> Dict[str, Any]:
+    if not _sam31_available:
+        return JSONResponse({"error": "SAM 3.1 not available"}, status_code=503)
+    
+    patient_id = payload.get("patient_id")
+    frames = payload.get("frames", [])
+    
+    if not frames:
+        return JSONResponse({"error": "frames array required"}, status_code=400)
+    
+    results = []
+    for i, frame_data in enumerate(frames):
+        try:
+            frame_b64 = frame_data.get("image_base64")
+            if not frame_b64:
+                results.append({"frame_index": i, "error": "Missing image_base64"})
+                continue
+            
+            frame = _decode_image_base64(frame_b64)
+            mode_str = frame_data.get("mode", "AUTOMATIC").upper()
+            from sam31_vision import SegmentationMode
+            mode = SegmentationMode(mode_str.lower())
+            
+            prompt_points = frame_data.get("prompt_points")
+            prompt_labels = frame_data.get("prompt_labels")
+            prompt_box = frame_data.get("prompt_box")
+            
+            result = coe.process_surgical_frame(
+                frame=frame,
+                patient_id=patient_id,
+                prompt_points=prompt_points,
+            )
+            
+            if result:
+                seg = result["segmentation"]
+                results.append({
+                    "frame_index": i,
+                    "timestamp_ns": seg.frame_timestamp_ns,
+                    "structures": [s.value for s in seg.structures],
+                    "scores": seg.scores,
+                    "phase": result["surgical_phase"],
+                    "fixtures": len(result["virtual_fixtures"]),
+                    "processing_ms": seg.processing_ms,
+                })
+            else:
+                results.append({"frame_index": i, "error": "Processing failed"})
+                
+        except Exception as e:
+            results.append({"frame_index": i, "error": str(e)})
+    
+    return {"patient_id": patient_id, "results": results}
+
+
+@app.get("/api/surgical/performance")
+async def surgical_performance() -> Dict[str, Any]:
+    if not _sam31_available:
+        return {"available": False, "message": "SAM 3.1 not loaded"}
+    
+    stats = coe.get_sam31_performance_stats()
+    if stats:
+        stats["available"] = True
+    return stats
+
+
+@app.get("/api/surgical/phase")
+async def surgical_current_phase() -> Dict[str, Any]:
+    if not _sam31_available:
+        return {"available": False, "phase": "UNKNOWN"}
+    
+    phase = coe.get_surgical_phase()
+    return {"available": True, "phase": phase}
+        }
+        
+        return response
+        
+    except Exception as e:
+        return JSONResponse({"error": f"Segmentation failed: {str(e)}"}, status_code=500)
+@app.websocket("/ws/surgical/stream")
+async def surgical_websocket_stream(websocket: WebSocket):
+    await websocket.accept()
+    print("[BioOS Surgical] WebSocket connected")
+    
+    try:
+        while True:
+            data = await websocket.receive_json()
+            
+            patient_id = data.get("patient_id")
+            if not patient_id:
+                await websocket.send_json({"error": "patient_id required"})
+                continue
+            
+            image_b64 = data.get("image_base64")
+            if not image_b64:
+                await websocket.send_json({"error": "image_base64 required"})
+                continue
+            
+            if not _sam31_available:
+                await websocket.send_json({"error": "SAM 3.1 not available"})
+                continue
+            
+            try:
+                frame = _decode_image_base64(image_b64)
+                
+                mode_str = data.get("mode", "AUTOMATIC").upper()
+                from sam31_vision import SegmentationMode
+                mode = SegmentationMode(mode_str.lower())
+                
+                result = coe.process_surgical_frame(
+                    frame=frame,
+                    patient_id=patient_id,
+                    prompt_points=data.get("prompt_points"),
+                )
+                
+                if result:
+                    seg = result["segmentation"]
+                    response = {
+                        "timestamp_ns": seg.frame_timestamp_ns,
+                        "structures": [s.value for s in seg.structures],
+                        "scores": seg.scores,
+                        "phase": result["surgical_phase"],
+                        "fixtures_count": len(result["virtual_fixtures"]),
+                        "plane_a_payload": result["plane_a_payload"],
+                        "processing_ms": seg.processing_ms,
+                    }
+                else:
+                    response = {"error": "Processing failed"}
+                    
+                await websocket.send_json(response)
+                
+            except Exception as e:
+                await websocket.send_json({"error": str(e)})
+                
+    except WebSocketDisconnect:
+        print("[BioOS Surgical] WebSocket disconnected")
+    except Exception as e:
+        print(f"[BioOS Surgical] WebSocket error: {e}")
+        await websocket.close()
 
 
 # Mount static web frontend

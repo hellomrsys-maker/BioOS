@@ -1,7 +1,7 @@
 """
 Comprehensive Service Test Suite for BioOS Plane B & Enterprise Layers
 Tests:
-- Engine 5 (COE): AMD ROCm inference, XGrammar JSON constrained generation, Merkle tree root hashing
+- Engine 5 (COE): Meta AI inference, XGrammar JSON constrained generation, Merkle tree root hashing
 - Engine 6 (OCE): Hospital Escalation Index, RTLS bed transitions, MHP 7 Ts, Standing Orders, HVAC, HICS Reverse Triage
 """
 
